@@ -1,0 +1,23 @@
+# Secrets
+.env
+*.env
+
+# Python
+backend/.venv/
+__pycache__/
+*.py[cod]
+
+# Django
+*.sqlite3
+staticfiles/
+media/
+
+# Node
+node_modules/
+.next/
+out/
+
+# Editors and operating systems
+.vscode/
+.DS_Store
+Thumbs.db
