@@ -33,7 +33,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-
+    "apps.artists.apps.ArtistsConfig",
     "rest_framework",
     "corsheaders",
     "drf_spectacular",
