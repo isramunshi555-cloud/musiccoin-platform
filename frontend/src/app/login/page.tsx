@@ -31,11 +31,15 @@ export default function LoginPage() {
       localStorage.setItem("access_token", response.data.access);
       localStorage.setItem("refresh_token", response.data.refresh);
 
-      router.push("/dashboard");
-    } catch (error) {
-      if (axios.isAxiosError(error)) {
+      const redirectTo =
+        sessionStorage.getItem("post_login_redirect") || "/dashboard";
+
+      sessionStorage.removeItem("post_login_redirect");
+      router.push(redirectTo);
+    } catch (requestError) {
+      if (axios.isAxiosError(requestError)) {
         setError(
-          error.response?.data?.detail ??
+          requestError.response?.data?.detail ??
             "Unable to log in. Please check your credentials.",
         );
       } else {
@@ -48,7 +52,6 @@ export default function LoginPage() {
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-[#07070a] text-white">
-      {/* Background image */}
       <div
         className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-40"
         style={{
@@ -56,15 +59,11 @@ export default function LoginPage() {
         }}
       />
 
-      {/* Dark overlay for text readability */}
       <div className="absolute inset-0 bg-gradient-to-r from-[#07070a]/65 via-[#07070a]/85 to-[#07070a]/95" />
-
-      {/* Soft decorative lighting */}
       <div className="absolute -left-32 top-10 h-96 w-96 rounded-full bg-violet-700/20 blur-[120px]" />
       <div className="absolute -right-32 bottom-0 h-96 w-96 rounded-full bg-amber-500/10 blur-[120px]" />
 
       <div className="relative mx-auto grid min-h-screen max-w-7xl lg:grid-cols-2">
-        {/* Left section */}
         <section className="hidden flex-col justify-between p-14 lg:flex">
           <Link href="/" className="flex w-fit items-center gap-3">
             <Image
@@ -94,22 +93,23 @@ export default function LoginPage() {
             </h1>
 
             <p className="mt-7 max-w-lg text-lg leading-8 text-neutral-300">
-              Discover artists, attend exclusive events and collect digital
-              experiences built for true music fans.
+              Discover artists, attend exclusive events and collect
+              digital experiences built for true music fans.
             </p>
 
             <div className="mt-10 flex flex-wrap gap-3">
-              <span className="rounded-full border border-white/10 bg-black/20 px-4 py-2 text-sm text-neutral-300 backdrop-blur-md">
-                Exclusive events
-              </span>
-
-              <span className="rounded-full border border-white/10 bg-black/20 px-4 py-2 text-sm text-neutral-300 backdrop-blur-md">
-                Digital tickets
-              </span>
-
-              <span className="rounded-full border border-white/10 bg-black/20 px-4 py-2 text-sm text-neutral-300 backdrop-blur-md">
-                Artist community
-              </span>
+              {[
+                "Exclusive events",
+                "Digital tickets",
+                "Artist community",
+              ].map((label) => (
+                <span
+                  key={label}
+                  className="rounded-full border border-white/10 bg-black/20 px-4 py-2 text-sm text-neutral-300 backdrop-blur-md"
+                >
+                  {label}
+                </span>
+              ))}
             </div>
           </div>
 
@@ -118,10 +118,8 @@ export default function LoginPage() {
           </p>
         </section>
 
-        {/* Login section */}
         <section className="flex items-center justify-center px-5 py-10 sm:px-10">
           <div className="w-full max-w-md">
-            {/* Mobile logo */}
             <Link
               href="/"
               className="mb-10 flex w-fit items-center gap-3 lg:hidden"
@@ -139,19 +137,17 @@ export default function LoginPage() {
             </Link>
 
             <div className="rounded-3xl border border-white/10 bg-black/40 p-7 shadow-2xl shadow-black/50 backdrop-blur-xl sm:p-10">
-              <div>
-                <p className="text-sm font-medium text-violet-400">
-                  Welcome back
-                </p>
+              <p className="text-sm font-medium text-violet-400">
+                Welcome back
+              </p>
 
-                <h2 className="mt-2 text-3xl font-semibold tracking-tight">
-                  Log in to MusicCoin
-                </h2>
+              <h2 className="mt-2 text-3xl font-semibold tracking-tight">
+                Log in to MusicCoin
+              </h2>
 
-                <p className="mt-3 text-sm leading-6 text-neutral-400">
-                  Enter your details to continue your musical journey.
-                </p>
-              </div>
+              <p className="mt-3 text-sm leading-6 text-neutral-400">
+                Enter your details to continue your musical journey.
+              </p>
 
               <form onSubmit={handleSubmit} className="mt-8 space-y-5">
                 <div>
@@ -185,7 +181,7 @@ export default function LoginPage() {
 
                     <Link
                       href="/forgot-password"
-                      className="text-sm text-violet-400 transition hover:text-violet-300"
+                      className="text-sm text-violet-400 hover:text-violet-300"
                     >
                       Forgot password?
                     </Link>
@@ -196,7 +192,9 @@ export default function LoginPage() {
                       id="password"
                       type={showPassword ? "text" : "password"}
                       value={password}
-                      onChange={(event) => setPassword(event.target.value)}
+                      onChange={(event) =>
+                        setPassword(event.target.value)
+                      }
                       required
                       autoComplete="current-password"
                       placeholder="Enter your password"
@@ -205,8 +203,10 @@ export default function LoginPage() {
 
                     <button
                       type="button"
-                      onClick={() => setShowPassword((current) => !current)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-medium text-neutral-400 transition hover:text-white"
+                      onClick={() =>
+                        setShowPassword((current) => !current)
+                      }
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-medium text-neutral-400 hover:text-white"
                     >
                       {showPassword ? "Hide" : "Show"}
                     </button>
@@ -222,7 +222,7 @@ export default function LoginPage() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 px-4 py-3.5 font-semibold shadow-lg shadow-violet-950/40 transition hover:-translate-y-0.5 hover:shadow-violet-800/30 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="w-full rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 px-4 py-3.5 font-semibold shadow-lg shadow-violet-950/40 transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {loading ? "Logging in..." : "Log in"}
                 </button>
@@ -230,11 +230,9 @@ export default function LoginPage() {
 
               <div className="my-7 flex items-center gap-4">
                 <div className="h-px flex-1 bg-white/10" />
-
                 <span className="text-xs uppercase tracking-wider text-neutral-600">
                   New here?
                 </span>
-
                 <div className="h-px flex-1 bg-white/10" />
               </div>
 
@@ -245,11 +243,6 @@ export default function LoginPage() {
                 Create a MusicCoin account
               </Link>
             </div>
-
-            <p className="mt-6 text-center text-xs leading-5 text-neutral-500">
-              By continuing, you agree to the MusicCoin Terms and Privacy
-              Policy.
-            </p>
           </div>
         </section>
       </div>

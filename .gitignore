@@ -21,3 +21,12 @@ out/
 .vscode/
 .DS_Store
 Thumbs.db
+
+# Smart-contract generated files
+smart-contracts/node_modules/
+smart-contracts/artifacts/
+smart-contracts/cache/
+smart-contracts/typechain-types/
+
+# Local contract deployment output
+smart-contracts/deployments.json
