@@ -1,224 +1,365 @@
 "use client";
 
-import { useState } from "react";
-import { 
-  QrCode, 
-  CheckCircle2, 
-  XCircle, 
-  RefreshCw, 
-  Camera, 
-  Clock 
+import axios from "axios";
+import { useRouter } from "next/navigation";
+import { FormEvent, useState } from "react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  LoaderCircle,
+  QrCode,
+  ScanLine,
+  ShieldCheck,
+  XCircle,
 } from "lucide-react";
 
-interface ScanResult {
+import api from "@/lib/api";
+
+type ScanResult = {
+  detail: string;
   valid: boolean;
-  reason: string;
-  details: string;
-  ticketId: string;
-  tier?: string;
-  token?: number;
-}
+  attendee_email?: string;
+  event_title?: string;
+  tier_name?: string;
+  nft_token_id?: number | null;
+  checked_in_at?: string;
+  already_used?: boolean;
+};
 
-interface LogEntry {
-  id: string;
-  status: "VALID" | "ALREADY_USED" | "INVALID";
-  time: string;
-  tier: string;
-}
+export default function ScannerPage() {
+  const router = useRouter();
 
-interface StoredTicket {
-  id: string;
-  eventTitle?: string;
-  tierName: string;
-  nftTokenId?: number;
-  status: string;
-}
+  const [ticketId, setTicketId] = useState("");
+  const [verificationHash, setVerificationHash] = useState("");
+  const [result, setResult] = useState<ScanResult | null>(null);
+  const [error, setError] = useState("");
+  const [scanning, setScanning] = useState(false);
 
-export default function GateScannerPage() {
-  const [ticketInput, setTicketInput] = useState("mc-pass-849102");
-  const [isVerifying, setIsVerifying] = useState(false);
-  const [scanResult, setScanResult] = useState<ScanResult | null>(null);
-  const [recentLogs, setRecentLogs] = useState<LogEntry[]>([
-    { id: "mc-pass-193048", status: "VALID", time: "10:14 AM", tier: "General Admission" },
-    { id: "mc-pass-771829", status: "ALREADY_USED", time: "10:11 AM", tier: "VIP Pass" },
-  ]);
+  async function handleCheckIn(
+    event: FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
 
-  const handleScan = () => {
-    if (!ticketInput) return;
-    setIsVerifying(true);
+    const accessToken = localStorage.getItem("access_token");
 
-    setTimeout(() => {
-      setIsVerifying(false);
+    if (!accessToken) {
+      sessionStorage.setItem(
+        "post_login_redirect",
+        "/scanner",
+      );
+      router.push("/login");
+      return;
+    }
 
-      // Check against localStorage tickets
-      const storedTickets: StoredTicket[] = JSON.parse(localStorage.getItem("mc_user_tickets") || "[]");
-      const matched = storedTickets.find((t) => t.id === ticketInput);
+    try {
+      setScanning(true);
+      setError("");
+      setResult(null);
 
-      if (matched) {
-        if (matched.status === "CHECKED_IN") {
-          const res: ScanResult = {
+      const response = await api.post<ScanResult>(
+        "/tickets/check-in/",
+        {
+          ticket_id: ticketId.trim(),
+          verification_hash: verificationHash.trim(),
+        },
+      );
+
+      setResult(response.data);
+    } catch (requestError) {
+      if (axios.isAxiosError(requestError)) {
+        if (requestError.response?.status === 401) {
+          localStorage.removeItem("access_token");
+          localStorage.removeItem("refresh_token");
+
+          sessionStorage.setItem(
+            "post_login_redirect",
+            "/scanner",
+          );
+
+          router.push("/login");
+          return;
+        }
+
+        const responseData = requestError.response?.data;
+
+        if (
+          responseData &&
+          typeof responseData === "object" &&
+          "detail" in responseData
+        ) {
+          setResult({
+            detail: String(responseData.detail),
             valid: false,
-            reason: "TICKET ALREADY USED",
-            details: "This pass was already scanned and checked in earlier today.",
-            ticketId: ticketInput,
-            tier: matched.tierName,
-          };
-          setScanResult(res);
-          setRecentLogs((prev) => [{ id: ticketInput, status: "ALREADY_USED", time: new Date().toLocaleTimeString(), tier: matched.tierName }, ...prev]);
+            already_used: Boolean(
+              responseData.already_used,
+            ),
+            checked_in_at: responseData.checked_in_at,
+          });
+        } else if (
+          responseData &&
+          typeof responseData === "object"
+        ) {
+          setError(
+            Object.values(responseData).flat().join(" "),
+          );
         } else {
-          // Mark ticket as checked in
-          matched.status = "CHECKED_IN";
-          localStorage.setItem("mc_user_tickets", JSON.stringify(storedTickets));
-
-          const res: ScanResult = {
-            valid: true,
-            reason: "ACCESS GRANTED",
-            details: `Welcome to ${matched.eventTitle || "Cyberbeats"}! Attendee verified.`,
-            ticketId: ticketInput,
-            tier: matched.tierName,
-            token: matched.nftTokenId,
-          };
-          setScanResult(res);
-          setRecentLogs((prev) => [{ id: ticketInput, status: "VALID", time: new Date().toLocaleTimeString(), tier: matched.tierName }, ...prev]);
+          setError("The ticket could not be verified.");
         }
       } else {
-        // Sample fallback validation
-        if (ticketInput.includes("849102")) {
-          const res: ScanResult = {
-            valid: true,
-            reason: "ACCESS GRANTED",
-            details: "Valid Polygon NFT Ticket. Tier: VIP Backstage & Artist Lounge.",
-            ticketId: ticketInput,
-            tier: "VIP Backstage & Lounge",
-            token: 42,
-          };
-          setScanResult(res);
-          setRecentLogs((prev) => [{ id: ticketInput, status: "VALID", time: new Date().toLocaleTimeString(), tier: "VIP Backstage" }, ...prev]);
-        } else {
-          const res: ScanResult = {
-            valid: false,
-            reason: "COUNTERFEIT / NOT FOUND",
-            details: "Cryptographic HMAC signature does not match any valid ticket on-chain.",
-            ticketId: ticketInput,
-          };
-          setScanResult(res);
-          setRecentLogs((prev) => [{ id: ticketInput, status: "INVALID", time: new Date().toLocaleTimeString(), tier: "Unknown" }, ...prev]);
-        }
+        setError("The ticket could not be verified.");
       }
-    }, 600);
-  };
+    } finally {
+      setScanning(false);
+    }
+  }
+
+  function resetScanner() {
+    setTicketId("");
+    setVerificationHash("");
+    setResult(null);
+    setError("");
+  }
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
-      <div className="text-center mb-8">
-        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-purple-500/10 text-purple-400 mb-3">
-          <QrCode className="h-6 w-6" />
-        </div>
-        <h1 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">
-          Festival Gate Check-in Scanner
-        </h1>
-        <p className="text-xs sm:text-sm text-neutral-400 mt-1">
-          Staff entrance validator verifying cryptographic NFT tickets and preventing duplicate admissions.
-        </p>
-      </div>
+    <main className="min-h-screen bg-[#060608] text-white">
+      <section className="relative overflow-hidden border-b border-white/10">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(124,58,237,0.22),transparent_35%),radial-gradient(circle_at_80%_20%,rgba(16,185,129,0.12),transparent_30%)]" />
 
-      {/* Scanner Box */}
-      <div className="rounded-3xl border border-neutral-800 bg-neutral-900/80 p-6 sm:p-8 backdrop-blur-xl shadow-2xl mb-8">
-        <div className="mb-6 flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-neutral-700 bg-neutral-950/60 p-8 text-center">
-          <Camera className="h-10 w-10 text-neutral-500 mb-3 animate-pulse" />
-          <p className="text-xs font-semibold text-neutral-300">Point Camera at Fan&apos;s Digital Pass</p>
-          <p className="text-[11px] text-neutral-500 mt-1">Or enter/paste the pass signed hash below</p>
-        </div>
+        <div className="relative mx-auto max-w-6xl px-6 pb-14 pt-20">
+          <div className="flex items-center gap-3 text-violet-400">
+            <ScanLine size={25} />
+            <p className="text-sm font-semibold uppercase tracking-[0.3em]">
+              Event operations
+            </p>
+          </div>
 
-        <div className="space-y-4">
-          <div>
-            <label className="block text-xs font-semibold text-neutral-400 mb-1.5">
-              Pass ID or Cryptographic QR Hash
-            </label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={ticketInput}
-                onChange={(e) => setTicketInput(e.target.value)}
-                placeholder="e.g. mc-pass-849102"
-                className="flex-1 rounded-xl border border-neutral-800 bg-neutral-950 px-4 py-3 text-sm font-mono text-white placeholder-neutral-600 focus:border-purple-500 focus:outline-none"
-              />
-              <button
-                onClick={handleScan}
-                disabled={isVerifying}
-                className="flex items-center gap-2 rounded-xl bg-purple-600 px-6 py-3 text-xs font-bold text-white hover:bg-purple-500 transition-colors disabled:opacity-50"
+          <h1 className="mt-5 text-4xl font-black tracking-tight sm:text-6xl">
+            Secure gate scanner
+          </h1>
+
+          <p className="mt-5 max-w-2xl text-lg leading-8 text-neutral-400">
+            Verify MusicCoin tickets, prevent duplicate entry and
+            record admissions securely.
+          </p>
+        </div>
+      </section>
+
+      <section className="mx-auto grid max-w-6xl gap-8 px-6 py-12 lg:grid-cols-[1fr_380px]">
+        <div className="rounded-3xl border border-white/10 bg-[#0d0d10] p-6 sm:p-8">
+          <div className="flex items-center gap-3">
+            <div className="rounded-xl bg-violet-500/10 p-3 text-violet-400">
+              <QrCode size={28} />
+            </div>
+
+            <div>
+              <h2 className="text-2xl font-bold">
+                Verify attendee
+              </h2>
+              <p className="mt-1 text-sm text-neutral-500">
+                Enter the details from the attendee&apos;s ticket.
+              </p>
+            </div>
+          </div>
+
+          <form
+            onSubmit={handleCheckIn}
+            className="mt-8 space-y-6"
+          >
+            <div>
+              <label
+                htmlFor="ticketId"
+                className="mb-2 block text-sm font-medium text-neutral-300"
               >
-                {isVerifying ? (
-                  <RefreshCw className="h-4 w-4 animate-spin" />
-                ) : (
-                  <span>Verify Gate Entry</span>
-                )}
+                Ticket ID
+              </label>
+
+              <input
+                id="ticketId"
+                type="text"
+                value={ticketId}
+                onChange={(event) =>
+                  setTicketId(event.target.value)
+                }
+                required
+                placeholder="Paste the ticket UUID"
+                className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3.5 font-mono text-sm text-white outline-none placeholder:text-neutral-700 focus:border-violet-500"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="verificationHash"
+                className="mb-2 block text-sm font-medium text-neutral-300"
+              >
+                Verification code
+              </label>
+
+              <textarea
+                id="verificationHash"
+                value={verificationHash}
+                onChange={(event) =>
+                  setVerificationHash(event.target.value)
+                }
+                required
+                rows={4}
+                placeholder="Paste the 64-character verification code"
+                className="w-full resize-none rounded-xl border border-white/10 bg-black/40 px-4 py-3.5 font-mono text-sm text-white outline-none placeholder:text-neutral-700 focus:border-violet-500"
+              />
+            </div>
+
+            {error && (
+              <div className="flex gap-3 rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-300">
+                <AlertTriangle
+                  className="shrink-0"
+                  size={20}
+                />
+                <p>{error}</p>
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={scanning}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 px-5 py-4 font-semibold transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {scanning ? (
+                <>
+                  <LoaderCircle
+                    className="animate-spin"
+                    size={20}
+                  />
+                  Verifying…
+                </>
+              ) : (
+                <>
+                  <ScanLine size={20} />
+                  Verify and check in
+                </>
+              )}
+            </button>
+          </form>
+        </div>
+
+        <aside className="space-y-6">
+          {result ? (
+            <div
+              className={`rounded-3xl border p-7 ${
+                result.valid
+                  ? "border-emerald-500/30 bg-emerald-500/10"
+                  : "border-red-500/30 bg-red-500/10"
+              }`}
+            >
+              {result.valid ? (
+                <CheckCircle2
+                  className="text-emerald-400"
+                  size={48}
+                />
+              ) : (
+                <XCircle
+                  className="text-red-400"
+                  size={48}
+                />
+              )}
+
+              <h2 className="mt-5 text-2xl font-bold">
+                {result.valid
+                  ? "Admission granted"
+                  : "Admission denied"}
+              </h2>
+
+              <p
+                className={`mt-3 leading-7 ${
+                  result.valid
+                    ? "text-emerald-100"
+                    : "text-red-100"
+                }`}
+              >
+                {result.detail}
+              </p>
+
+              {result.valid && (
+                <div className="mt-6 space-y-4 rounded-2xl bg-black/25 p-5 text-sm">
+                  <ResultRow
+                    label="Attendee"
+                    value={result.attendee_email}
+                  />
+                  <ResultRow
+                    label="Event"
+                    value={result.event_title}
+                  />
+                  <ResultRow
+                    label="Ticket tier"
+                    value={result.tier_name}
+                  />
+                  <ResultRow
+                    label="Checked in"
+                    value={
+                      result.checked_in_at
+                        ? new Date(
+                            result.checked_in_at,
+                          ).toLocaleString("en-IN")
+                        : undefined
+                    }
+                  />
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={resetScanner}
+                className="mt-6 w-full rounded-xl border border-white/15 px-5 py-3 font-semibold hover:bg-white/5"
+              >
+                Scan another ticket
               </button>
             </div>
-          </div>
-        </div>
+          ) : (
+            <div className="rounded-3xl border border-white/10 bg-white/[0.025] p-7">
+              <ShieldCheck
+                className="text-emerald-400"
+                size={40}
+              />
 
-        {/* Scan Result Feedback Banner */}
-        {scanResult && (
-          <div className={`mt-6 rounded-2xl border p-5 transition-all ${
-            scanResult.valid
-              ? "border-emerald-500/50 bg-emerald-950/30 text-emerald-300"
-              : "border-red-500/50 bg-red-950/30 text-red-300"
-          }`}>
-            <div className="flex items-start gap-3">
-              {scanResult.valid ? (
-                <CheckCircle2 className="h-6 w-6 text-emerald-400 shrink-0 mt-0.5" />
-              ) : (
-                <XCircle className="h-6 w-6 text-red-400 shrink-0 mt-0.5" />
-              )}
-              <div className="flex-1">
-                <h3 className="text-base font-bold tracking-tight">
-                  {scanResult.reason}
-                </h3>
-                <p className="text-xs mt-1 text-neutral-300 leading-relaxed">
-                  {scanResult.details}
-                </p>
+              <h2 className="mt-5 text-xl font-bold">
+                Verification checks
+              </h2>
 
-                {scanResult.tier && (
-                  <div className="mt-3 flex items-center gap-4 text-xs font-semibold">
-                    <span className="text-white">Tier: {scanResult.tier}</span>
-                    {scanResult.token && (
-                      <span className="text-purple-400">NFT Token #{scanResult.token}</span>
-                    )}
-                  </div>
-                )}
-              </div>
+              <ul className="mt-5 space-y-4 text-sm leading-6 text-neutral-400">
+                <li>• Ticket verification-code integrity</li>
+                <li>• Organizer authorization</li>
+                <li>• Event entry time window</li>
+                <li>• Cancelled ticket detection</li>
+                <li>• Duplicate check-in prevention</li>
+              </ul>
             </div>
-          </div>
-        )}
-      </div>
+          )}
 
-      {/* Recent Gate Scan Activity */}
-      <div className="rounded-2xl border border-neutral-800 bg-neutral-900/60 p-6">
-        <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
-          <Clock className="h-4 w-4 text-purple-400" /> Recent Gate Admissions Log
-        </h3>
-        <div className="divide-y divide-neutral-800 text-xs">
-          {recentLogs.map((log, i) => (
-            <div key={i} className="py-2.5 flex items-center justify-between">
-              <div>
-                <span className="font-mono text-neutral-300 font-semibold">{log.id}</span>
-                <span className="text-neutral-500 ml-2">({log.tier})</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="text-neutral-500">{log.time}</span>
-                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                  log.status === "VALID"
-                    ? "bg-emerald-950 text-emerald-400 border border-emerald-500/30"
-                    : "bg-red-950 text-red-400 border border-red-500/30"
-                }`}>
-                  {log.status}
-                </span>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
+          <div className="rounded-2xl border border-amber-500/20 bg-amber-500/[0.06] p-5 text-sm leading-6 text-amber-100">
+            Only the event organizer or an administrator can check
+            attendees in.
+          </div>
+        </aside>
+      </section>
+    </main>
+  );
+}
+
+function ResultRow({
+  label,
+  value,
+}: {
+  label: string;
+  value?: string;
+}) {
+  if (!value) {
+    return null;
+  }
+
+  return (
+    <div>
+      <p className="text-xs uppercase tracking-wider text-neutral-500">
+        {label}
+      </p>
+      <p className="mt-1 break-words text-white">{value}</p>
     </div>
   );
 }
