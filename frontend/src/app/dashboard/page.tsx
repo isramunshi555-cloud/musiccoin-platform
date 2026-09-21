@@ -17,13 +17,14 @@ type User = {
 
 export default function DashboardPage() {
   const router = useRouter();
+
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function loadUser() {
       try {
-        const response = await api.get("/users/me/");
+        const response = await api.get<User>("/users/me/");
         setUser(response.data);
       } catch {
         localStorage.removeItem("access_token");
@@ -46,6 +47,8 @@ export default function DashboardPage() {
           refresh: refreshToken,
         });
       }
+    } catch {
+      // Local authentication data is still cleared if logout fails.
     } finally {
       localStorage.removeItem("access_token");
       localStorage.removeItem("refresh_token");
@@ -56,7 +59,7 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-neutral-950 text-white">
-        <p>Loading...</p>
+        <p className="text-neutral-400">Loading your dashboard...</p>
       </main>
     );
   }
@@ -71,8 +74,9 @@ export default function DashboardPage() {
           </div>
 
           <button
+            type="button"
             onClick={handleLogout}
-            className="rounded-lg border border-neutral-700 px-4 py-2 hover:bg-neutral-800"
+            className="rounded-lg border border-neutral-700 px-4 py-2 transition hover:bg-neutral-800"
           >
             Log out
           </button>
@@ -89,7 +93,12 @@ export default function DashboardPage() {
               <p>Role: {user.role}</p>
               <p>Phone: {user.phone || "Not provided"}</p>
               <p>
-                Verification: {user.is_verified ? "Verified" : "Not verified"}
+                Verification:{" "}
+                {user.is_verified ? "Verified" : "Not verified"}
+              </p>
+              <p>
+                Wallet:{" "}
+                {user.wallet_address || "No wallet connected"}
               </p>
             </div>
           </section>

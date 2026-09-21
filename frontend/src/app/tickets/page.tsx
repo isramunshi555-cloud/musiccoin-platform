@@ -10,9 +10,9 @@ import {
   Copy,
   LoaderCircle,
   MapPin,
-  QrCode,
   Ticket,
 } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
 
 import api from "@/lib/api";
 
@@ -89,13 +89,24 @@ export default function MyTicketsPage() {
     }).format(new Date(date));
   }
 
-  async function copyValue(value: string, name: string) {
-    await navigator.clipboard.writeText(value);
-    setCopied(name);
+  function createQrValue(ticketItem: TicketItem) {
+    return JSON.stringify({
+      ticket_id: ticketItem.id,
+      verification_hash: ticketItem.verification_hash,
+    });
+  }
 
-    window.setTimeout(() => {
-      setCopied("");
-    }, 1500);
+  async function copyValue(value: string, name: string) {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(name);
+
+      window.setTimeout(() => {
+        setCopied("");
+      }, 1500);
+    } catch {
+      setError("The value could not be copied.");
+    }
   }
 
   return (
@@ -181,19 +192,20 @@ export default function MyTicketsPage() {
                       </h2>
                     </div>
 
-                    <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-300">
+                    <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1 text-xs font-semibold uppercase text-emerald-300">
                       {ticketItem.status.replaceAll("_", " ")}
                     </span>
                   </div>
                 </div>
 
-                <div className="grid gap-6 p-6 sm:grid-cols-[1fr_130px]">
+                <div className="grid gap-6 p-6 sm:grid-cols-[1fr_180px]">
                   <div className="space-y-4">
                     <div className="flex items-start gap-3 text-sm text-neutral-400">
                       <CalendarDays
                         className="mt-0.5 shrink-0 text-violet-400"
                         size={18}
                       />
+
                       {formatDate(ticketItem.event_start_date)}
                     </div>
 
@@ -202,6 +214,7 @@ export default function MyTicketsPage() {
                         className="shrink-0 text-violet-400"
                         size={18}
                       />
+
                       {ticketItem.event_city}
                     </div>
 
@@ -210,6 +223,7 @@ export default function MyTicketsPage() {
                         className="shrink-0 text-violet-400"
                         size={18}
                       />
+
                       {ticketItem.tier_name}
                     </div>
 
@@ -217,15 +231,25 @@ export default function MyTicketsPage() {
                       <p className="text-xs uppercase tracking-wider text-neutral-600">
                         Purchase price
                       </p>
+
                       <p className="mt-1 text-xl font-bold">
                         ₹{ticketItem.purchase_price}
                       </p>
                     </div>
                   </div>
 
-                  <div className="flex min-h-32 flex-col items-center justify-center rounded-2xl border border-white/10 bg-white p-4 text-black">
-                    <QrCode size={65} />
-                    <p className="mt-2 text-center text-[10px] font-bold uppercase">
+                  <div className="flex min-h-44 flex-col items-center justify-center rounded-2xl border border-white/10 bg-white p-4 text-black">
+                    <QRCodeSVG
+                      value={createQrValue(ticketItem)}
+                      size={140}
+                      level="H"
+                      marginSize={1}
+                      bgColor="#ffffff"
+                      fgColor="#000000"
+                      title={`MusicCoin ticket for ${ticketItem.event_title}`}
+                    />
+
+                    <p className="mt-3 text-center text-[10px] font-bold uppercase tracking-wider">
                       Secure pass
                     </p>
                   </div>
@@ -247,8 +271,9 @@ export default function MyTicketsPage() {
                         onClick={() =>
                           copyValue(ticketItem.id, ticketItem.id)
                         }
-                        className="rounded-lg border border-white/10 p-2 text-neutral-400 hover:text-white"
+                        className="rounded-lg border border-white/10 p-2 text-neutral-400 transition hover:text-white"
                         title="Copy ticket ID"
+                        aria-label="Copy ticket ID"
                       >
                         {copied === ticketItem.id ? (
                           <CheckCircle2
@@ -280,8 +305,9 @@ export default function MyTicketsPage() {
                             `${ticketItem.id}-hash`,
                           )
                         }
-                        className="rounded-lg border border-white/10 p-2 text-neutral-400 hover:text-white"
+                        className="rounded-lg border border-white/10 p-2 text-neutral-400 transition hover:text-white"
                         title="Copy verification code"
+                        aria-label="Copy verification code"
                       >
                         {copied === `${ticketItem.id}-hash` ? (
                           <CheckCircle2
@@ -294,6 +320,13 @@ export default function MyTicketsPage() {
                       </button>
                     </div>
                   </div>
+
+                  {ticketItem.checked_in_at && (
+                    <div className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 p-4 text-sm text-emerald-300">
+                      Checked in on{" "}
+                      {formatDate(ticketItem.checked_in_at)}
+                    </div>
+                  )}
                 </div>
               </article>
             ))}
