@@ -1,10 +1,18 @@
 "use client";
 
 import axios from "axios";
+import type { Html5Qrcode } from "html5-qrcode";
 import { useRouter } from "next/navigation";
-import { FormEvent, useState } from "react";
+import {
+  FormEvent,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import {
   AlertTriangle,
+  Camera,
+  CameraOff,
   CheckCircle2,
   LoaderCircle,
   QrCode,
@@ -26,14 +34,172 @@ type ScanResult = {
   already_used?: boolean;
 };
 
+type TicketQrPayload = {
+  ticket_id: string;
+  verification_hash: string;
+};
+
 export default function ScannerPage() {
   const router = useRouter();
+  const qrScannerRef = useRef<Html5Qrcode | null>(null);
 
   const [ticketId, setTicketId] = useState("");
-  const [verificationHash, setVerificationHash] = useState("");
-  const [result, setResult] = useState<ScanResult | null>(null);
+  const [verificationHash, setVerificationHash] =
+    useState("");
+  const [result, setResult] = useState<ScanResult | null>(
+    null,
+  );
   const [error, setError] = useState("");
+  const [scanMessage, setScanMessage] = useState("");
   const [scanning, setScanning] = useState(false);
+  const [cameraStarting, setCameraStarting] =
+    useState(false);
+  const [cameraActive, setCameraActive] = useState(false);
+
+  useEffect(() => {
+    return () => {
+      const scanner = qrScannerRef.current;
+
+      if (scanner) {
+        scanner
+          .stop()
+          .catch(() => {
+            // The camera may already be stopped.
+          })
+          .finally(() => {
+            try {
+              scanner.clear();
+            } catch {
+              // The scanner element may already be removed.
+            }
+          });
+      }
+    };
+  }, []);
+
+  function parseQrPayload(decodedText: string) {
+    const parsedData = JSON.parse(
+      decodedText,
+    ) as Partial<TicketQrPayload>;
+
+    if (
+      typeof parsedData.ticket_id !== "string" ||
+      typeof parsedData.verification_hash !== "string" ||
+      !parsedData.ticket_id.trim() ||
+      !parsedData.verification_hash.trim()
+    ) {
+      throw new Error("Invalid MusicCoin ticket QR code.");
+    }
+
+    return {
+      ticket_id: parsedData.ticket_id.trim(),
+      verification_hash:
+        parsedData.verification_hash.trim(),
+    };
+  }
+
+  async function stopCamera() {
+    const scanner = qrScannerRef.current;
+
+    if (scanner) {
+      try {
+        await scanner.stop();
+      } catch {
+        // The scanner might already be stopped.
+      }
+
+      try {
+        scanner.clear();
+      } catch {
+        // The scanner container might already be clear.
+      }
+
+      qrScannerRef.current = null;
+    }
+
+    setCameraActive(false);
+    setCameraStarting(false);
+  }
+
+  async function handleQrDecoded(decodedText: string) {
+    try {
+      const qrPayload = parseQrPayload(decodedText);
+
+      setTicketId(qrPayload.ticket_id);
+      setVerificationHash(qrPayload.verification_hash);
+      setResult(null);
+      setError("");
+      setScanMessage(
+        "Ticket QR captured. Select “Verify and check in” to validate admission.",
+      );
+
+      await stopCamera();
+    } catch {
+      setError(
+        "This QR code is not a valid MusicCoin ticket.",
+      );
+    }
+  }
+
+  async function startCamera() {
+    const accessToken = localStorage.getItem("access_token");
+
+    if (!accessToken) {
+      sessionStorage.setItem(
+        "post_login_redirect",
+        "/scanner",
+      );
+      router.push("/login");
+      return;
+    }
+
+    try {
+      setCameraStarting(true);
+      setCameraActive(true);
+      setError("");
+      setScanMessage("");
+      setResult(null);
+
+      await new Promise<void>((resolve) => {
+        window.requestAnimationFrame(() => resolve());
+      });
+
+      const qrCodeModule = await import("html5-qrcode");
+      const scanner = new qrCodeModule.Html5Qrcode(
+        "musiccoin-qr-reader",
+      );
+
+      qrScannerRef.current = scanner;
+
+      await scanner.start(
+        {
+          facingMode: "environment",
+        },
+        {
+          fps: 10,
+          qrbox: {
+            width: 240,
+            height: 240,
+          },
+          aspectRatio: 1,
+        },
+        (decodedText) => {
+          void handleQrDecoded(decodedText);
+        },
+        () => {
+          // Scanning continues until a valid QR is detected.
+        },
+      );
+
+      setCameraStarting(false);
+    } catch {
+      await stopCamera();
+
+      setError(
+        "The camera could not be opened. Allow camera permission or enter the ticket details manually.",
+      );
+    }
+  }
 
   async function handleCheckIn(
     event: FormEvent<HTMLFormElement>,
@@ -51,9 +217,17 @@ export default function ScannerPage() {
       return;
     }
 
+    if (!ticketId.trim() || !verificationHash.trim()) {
+      setError(
+        "Scan a ticket QR code or enter both ticket details.",
+      );
+      return;
+    }
+
     try {
       setScanning(true);
       setError("");
+      setScanMessage("");
       setResult(null);
 
       const response = await api.post<ScanResult>(
@@ -113,11 +287,14 @@ export default function ScannerPage() {
     }
   }
 
-  function resetScanner() {
+  async function resetScanner() {
+    await stopCamera();
+
     setTicketId("");
     setVerificationHash("");
     setResult(null);
     setError("");
+    setScanMessage("");
   }
 
   return (
@@ -128,6 +305,7 @@ export default function ScannerPage() {
         <div className="relative mx-auto max-w-6xl px-6 pb-14 pt-20">
           <div className="flex items-center gap-3 text-violet-400">
             <ScanLine size={25} />
+
             <p className="text-sm font-semibold uppercase tracking-[0.3em]">
               Event operations
             </p>
@@ -138,8 +316,8 @@ export default function ScannerPage() {
           </h1>
 
           <p className="mt-5 max-w-2xl text-lg leading-8 text-neutral-400">
-            Verify MusicCoin tickets, prevent duplicate entry and
-            record admissions securely.
+            Scan MusicCoin ticket QR codes, prevent duplicate
+            entry and record admissions securely.
           </p>
         </div>
       </section>
@@ -155,11 +333,87 @@ export default function ScannerPage() {
               <h2 className="text-2xl font-bold">
                 Verify attendee
               </h2>
+
               <p className="mt-1 text-sm text-neutral-500">
-                Enter the details from the attendee&apos;s ticket.
+                Scan the attendee&apos;s QR code or enter the
+                ticket details manually.
               </p>
             </div>
           </div>
+
+          <div className="mt-8 rounded-2xl border border-white/10 bg-black/30 p-4">
+            <div
+              id="musiccoin-qr-reader"
+              className={
+                cameraActive
+                  ? "overflow-hidden rounded-xl bg-white"
+                  : "hidden"
+              }
+            />
+
+            {!cameraActive && (
+              <div className="flex min-h-48 flex-col items-center justify-center text-center">
+                <Camera
+                  className="text-violet-400"
+                  size={42}
+                />
+
+                <p className="mt-4 font-semibold">
+                  Scan a MusicCoin ticket
+                </p>
+
+                <p className="mt-2 max-w-sm text-sm leading-6 text-neutral-500">
+                  Open your camera and point it at the QR code
+                  displayed on the attendee&apos;s ticket.
+                </p>
+              </div>
+            )}
+
+            <div className="mt-4 flex flex-wrap gap-3">
+              {!cameraActive ? (
+                <button
+                  type="button"
+                  onClick={() => void startCamera()}
+                  disabled={cameraStarting}
+                  className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-violet-600 px-5 py-3 font-semibold transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {cameraStarting ? (
+                    <>
+                      <LoaderCircle
+                        className="animate-spin"
+                        size={19}
+                      />
+                      Opening camera...
+                    </>
+                  ) : (
+                    <>
+                      <Camera size={19} />
+                      Open camera
+                    </>
+                  )}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => void stopCamera()}
+                  className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-white/15 px-5 py-3 font-semibold transition hover:bg-white/5"
+                >
+                  <CameraOff size={19} />
+                  Stop camera
+                </button>
+              )}
+            </div>
+          </div>
+
+          {scanMessage && (
+            <div className="mt-5 flex gap-3 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm text-emerald-300">
+              <CheckCircle2
+                className="shrink-0"
+                size={20}
+              />
+              <p>{scanMessage}</p>
+            </div>
+          )}
 
           <form
             onSubmit={handleCheckIn}
@@ -181,7 +435,7 @@ export default function ScannerPage() {
                   setTicketId(event.target.value)
                 }
                 required
-                placeholder="Paste the ticket UUID"
+                placeholder="Scan the QR or paste the ticket UUID"
                 className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3.5 font-mono text-sm text-white outline-none placeholder:text-neutral-700 focus:border-violet-500"
               />
             </div>
@@ -202,7 +456,7 @@ export default function ScannerPage() {
                 }
                 required
                 rows={4}
-                placeholder="Paste the 64-character verification code"
+                placeholder="Scan the QR or paste the verification code"
                 className="w-full resize-none rounded-xl border border-white/10 bg-black/40 px-4 py-3.5 font-mono text-sm text-white outline-none placeholder:text-neutral-700 focus:border-violet-500"
               />
             </div>
@@ -228,7 +482,7 @@ export default function ScannerPage() {
                     className="animate-spin"
                     size={20}
                   />
-                  Verifying…
+                  Verifying...
                 </>
               ) : (
                 <>
@@ -283,14 +537,17 @@ export default function ScannerPage() {
                     label="Attendee"
                     value={result.attendee_email}
                   />
+
                   <ResultRow
                     label="Event"
                     value={result.event_title}
                   />
+
                   <ResultRow
                     label="Ticket tier"
                     value={result.tier_name}
                   />
+
                   <ResultRow
                     label="Checked in"
                     value={
@@ -306,8 +563,8 @@ export default function ScannerPage() {
 
               <button
                 type="button"
-                onClick={resetScanner}
-                className="mt-6 w-full rounded-xl border border-white/15 px-5 py-3 font-semibold hover:bg-white/5"
+                onClick={() => void resetScanner()}
+                className="mt-6 w-full rounded-xl border border-white/15 px-5 py-3 font-semibold transition hover:bg-white/5"
               >
                 Scan another ticket
               </button>
@@ -334,8 +591,14 @@ export default function ScannerPage() {
           )}
 
           <div className="rounded-2xl border border-amber-500/20 bg-amber-500/[0.06] p-5 text-sm leading-6 text-amber-100">
-            Only the event organizer or an administrator can check
-            attendees in.
+            Only the event organizer or an administrator can
+            check attendees in.
+          </div>
+
+          <div className="rounded-2xl border border-blue-500/20 bg-blue-500/[0.06] p-5 text-sm leading-6 text-blue-100">
+            Camera scanning works on localhost or over HTTPS.
+            Manual verification remains available when camera
+            access is unavailable.
           </div>
         </aside>
       </section>
@@ -359,7 +622,10 @@ function ResultRow({
       <p className="text-xs uppercase tracking-wider text-neutral-500">
         {label}
       </p>
-      <p className="mt-1 break-words text-white">{value}</p>
+
+      <p className="mt-1 break-words text-white">
+        {value}
+      </p>
     </div>
   );
 }
