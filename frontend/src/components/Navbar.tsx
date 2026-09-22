@@ -19,7 +19,17 @@ import { useEffect, useState } from "react";
 export default function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { address, isConnected, balance, musicBalance, connectWallet, disconnectWallet } = useWallet();
+  const {
+    address,
+    isConnected,
+    isConnecting,
+    balance,
+    musicBalance,
+    network,
+    error: walletError,
+    connectWallet,
+    disconnectWallet,
+  } = useWallet();
   const [hasToken, setHasToken] = useState(false);
 
   useEffect(() => {
@@ -88,14 +98,18 @@ export default function Navbar() {
           {isConnected && address ? (
             <div className="flex items-center gap-2">
               <div className="hidden lg:flex items-center gap-2 bg-neutral-900 border border-neutral-800 rounded-xl px-3 py-1.5 text-xs">
-                <span className="text-purple-400 font-bold">{musicBalance} MUSIC</span>
+                <span className="text-purple-400 font-bold">
+                  {musicBalance === "Not configured"
+                    ? "MUSIC not configured"
+                    : `${musicBalance} MUSIC`}
+                </span>
                 <span className="text-neutral-600">•</span>
                 <span className="text-neutral-300">{balance} POL</span>
               </div>
               <button
                 onClick={disconnectWallet}
                 className="flex items-center gap-2 rounded-xl border border-purple-500/40 bg-purple-950/30 px-3.5 py-2 text-xs font-semibold text-purple-200 hover:bg-purple-900/40 transition-colors"
-                title="Click to disconnect wallet"
+                title={`${network}. Click to disconnect wallet`}
               >
                 <Wallet className="h-3.5 w-3.5 text-purple-400" />
                 <span>{address.slice(0, 6)}...{address.slice(-4)}</span>
@@ -103,12 +117,22 @@ export default function Navbar() {
             </div>
           ) : (
             <button
-              onClick={connectWallet}
-              className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 px-4 py-2 text-xs font-semibold text-white shadow-lg shadow-purple-600/25 hover:opacity-95 transition-opacity"
+              onClick={() => void connectWallet()}
+              disabled={isConnecting}
+              className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 px-4 py-2 text-xs font-semibold text-white shadow-lg shadow-purple-600/25 hover:opacity-95 transition-opacity disabled:cursor-wait disabled:opacity-60"
             >
               <Wallet className="h-3.5 w-3.5" />
-              Connect Wallet
+              {isConnecting ? "Connecting..." : "Connect Wallet"}
             </button>
+          )}
+
+          {walletError && (
+            <span
+              className="hidden max-w-56 text-xs text-red-300 xl:block"
+              title={walletError}
+            >
+              {walletError}
+            </span>
           )}
 
           {hasToken ? (
