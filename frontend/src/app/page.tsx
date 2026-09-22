@@ -2,6 +2,9 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import WalletConnect from "@/components/WalletConnect";
+import MusicNFTPanel from "@/components/MusicNFTPanel";
+
 import {
   ArrowRight,
   Calendar,
@@ -11,8 +14,6 @@ import {
   Ticket,
   Zap,
 } from "lucide-react";
-
-import { useWallet } from "@/context/WalletContext";
 
 const featuredFestivals = [
   {
@@ -57,11 +58,10 @@ const featuredFestivals = [
 ];
 
 export default function HomePage() {
-  const { isConnected, connectWallet } = useWallet();
-
   return (
     <div className="relative overflow-hidden">
       <div className="pointer-events-none absolute -top-40 left-1/2 h-[500px] w-[800px] -translate-x-1/2 rounded-full bg-purple-600/15 blur-[140px]" />
+
       <div className="pointer-events-none absolute -left-40 top-96 h-[400px] w-[600px] rounded-full bg-indigo-600/10 blur-[130px]" />
 
       <section className="relative mx-auto max-w-7xl px-4 pb-20 pt-16 sm:px-6 lg:pb-28 lg:pt-24">
@@ -94,31 +94,23 @@ export default function HomePage() {
               <Ticket className="h-4 w-4" />
               Explore Festivals
             </Link>
+          </div>
 
-            {!isConnected ? (
-              <button
-                type="button"
-                onClick={connectWallet}
-                className="flex items-center gap-2 rounded-xl border border-neutral-700 bg-neutral-900/80 px-6 py-3.5 text-sm font-semibold text-neutral-200 backdrop-blur-md transition-all hover:bg-neutral-800"
-              >
-                <Coins className="h-4 w-4 text-purple-400" />
-                Connect Wallet
-              </button>
-            ) : (
-              <Link
-                href="/staking"
-                className="flex items-center gap-2 rounded-xl border border-purple-500/40 bg-purple-950/40 px-6 py-3.5 text-sm font-semibold text-purple-200 backdrop-blur-md transition-all hover:bg-purple-900/40"
-              >
-                <Coins className="h-4 w-4 text-purple-400" />
-                Stake MUSIC Tokens
-              </Link>
-            )}
+          <div className="mx-auto mt-8 max-w-md rounded-2xl border border-neutral-800 bg-neutral-900/60 p-5 text-left backdrop-blur-xl">
+            <WalletConnect />
+          </div>
+
+          <div className="mx-auto mt-8 max-w-md rounded-2xl border border-neutral-800 bg-neutral-900/60 p-5 text-left backdrop-blur-xl">
+            <MusicNFTPanel />
           </div>
         </div>
 
         <div className="mt-16 grid grid-cols-2 gap-4 rounded-2xl border border-neutral-800 bg-neutral-900/40 p-6 backdrop-blur-xl md:grid-cols-4">
           <div className="text-center md:border-r md:border-neutral-800/80">
-            <p className="text-2xl font-black text-white sm:text-3xl">$1.2M+</p>
+            <p className="text-2xl font-black text-white sm:text-3xl">
+              $1.2M+
+            </p>
+
             <p className="mt-1 text-xs font-medium text-neutral-400">
               Ticket Volume Settled
             </p>
@@ -128,6 +120,7 @@ export default function HomePage() {
             <p className="text-2xl font-black text-purple-400 sm:text-3xl">
               0%
             </p>
+
             <p className="mt-1 text-xs font-medium text-neutral-400">
               Ticket Fraud &amp; Scalping
             </p>
@@ -137,6 +130,7 @@ export default function HomePage() {
             <p className="text-2xl font-black text-pink-400 sm:text-3xl">
               100%
             </p>
+
             <p className="mt-1 text-xs font-medium text-neutral-400">
               Instant Artist Payouts
             </p>
@@ -146,6 +140,7 @@ export default function HomePage() {
             <p className="text-2xl font-black text-amber-300 sm:text-3xl">
               25% APY
             </p>
+
             <p className="mt-1 text-xs font-medium text-neutral-400">
               Max Staking Rewards
             </p>
@@ -159,6 +154,7 @@ export default function HomePage() {
             <h2 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">
               Featured Worldwide Festivals
             </h2>
+
             <p className="mt-1 text-sm text-neutral-400">
               Verifiable NFT passes with built-in anti-scalping price ceilings.
             </p>
@@ -251,6 +247,7 @@ export default function HomePage() {
           <h2 className="text-3xl font-extrabold text-white">
             Architecture Designed for Fair Live Music
           </h2>
+
           <p className="mt-3 text-sm text-neutral-400">
             Powered by audited smart contracts working in unison to automate
             tickets, identity and royalties.
@@ -262,9 +259,11 @@ export default function HomePage() {
             <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-purple-500/10 text-purple-400">
               <Ticket className="h-6 w-6" />
             </div>
+
             <h3 className="mb-2 text-lg font-bold text-white">
               Smart NFT Ticketing
             </h3>
+
             <p className="text-xs leading-relaxed text-neutral-400">
               Every pass can become an on-chain NFT on Polygon with
               anti-scalping price caps. Gatekeepers verify secure QR codes in
@@ -276,9 +275,11 @@ export default function HomePage() {
             <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-pink-500/10 text-pink-400">
               <Zap className="h-6 w-6" />
             </div>
+
             <h3 className="mb-2 text-lg font-bold text-white">
               Instant Royalty Splits
             </h3>
+
             <p className="text-xs leading-relaxed text-neutral-400">
               Smart contracts can distribute festival revenues to artists,
               producers and labels on eligible primary and secondary sales.
@@ -289,9 +290,11 @@ export default function HomePage() {
             <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-amber-500/10 text-amber-400">
               <Coins className="h-6 w-6" />
             </div>
+
             <h3 className="mb-2 text-lg font-bold text-white">
               MUSIC Staking &amp; Rewards
             </h3>
+
             <p className="text-xs leading-relaxed text-neutral-400">
               Stake MUSIC tokens for rewards, priority ticket queues,
               governance voting and exclusive festival benefits.

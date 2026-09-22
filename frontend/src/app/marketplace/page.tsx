@@ -1,262 +1,295 @@
 "use client";
 
-import Image from "next/image";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
-  Check,
-  Coins,
-  Pause,
-  Play,
-  ShieldCheck,
-  Sparkles,
-} from "lucide-react";
+  BrowserProvider,
+  Contract,
+  formatEther,
+  parseEther,
+  ZeroAddress,
+} from "ethers";
+import type { Eip1193Provider } from "ethers";
+import { Coins, LoaderCircle, Music2, Plus, RefreshCw } from "lucide-react";
 
 import { useWallet } from "@/context/WalletContext";
 
-const nftItems = [
-  {
-    id: 1,
-    title: "Cybernetic Dreams (Unreleased VIP Mix)",
-    artist: "DJ Cyberpunk",
-    category: "SONG",
-    image:
-      "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=600&q=80",
-    priceMusic: "150 MUSIC",
-    pricePol: "0.02 POL",
-    royalty: "10% to Artist",
-    supply: "1 of 25",
-  },
-  {
-    id: 2,
-    title: "Neon Horizon - Genesis Album Pass",
-    artist: "Neon Horizon",
-    category: "ALBUM",
-    image:
-      "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&w=600&q=80",
-    priceMusic: "400 MUSIC",
-    pricePol: "0.05 POL",
-    royalty: "8% to Artist / Producer",
-    supply: "1 of 50",
-  },
-  {
-    id: 3,
-    title: "Amsterdam 2026 Lifetime VIP Pass",
-    artist: "Cyberbeats Festival",
-    category: "VIP_PASS",
-    image:
-      "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=600&q=80",
-    priceMusic: "1,200 MUSIC",
-    pricePol: "0.15 POL",
-    royalty: "5% to Platform DAO",
-    supply: "1 of 10",
-  },
-  {
-    id: 4,
-    title: "Synthetix Live Bass Stem #04",
-    artist: "Synthetix",
-    category: "SONG",
-    image:
-      "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=600&q=80",
-    priceMusic: "90 MUSIC",
-    pricePol: "0.012 POL",
-    royalty: "12% to Synthetix",
-    supply: "1 of 100",
-  },
-  {
-    id: 5,
-    title: "Tokyo Underground Golden Ticket",
-    artist: "SubSonic",
-    category: "VIP_PASS",
-    image:
-      "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&w=600&q=80",
-    priceMusic: "650 MUSIC",
-    pricePol: "0.08 POL",
-    royalty: "7% to Artists",
-    supply: "1 of 20",
-  },
-  {
-    id: 6,
-    title: "Solar Flare Anthem 3D Audio Stems",
-    artist: "Aura Waves",
-    category: "SONG",
-    image:
-      "https://images.unsplash.com/photo-1501386761578-eac5c94b800a?auto=format&fit=crop&w=600&q=80",
-    priceMusic: "180 MUSIC",
-    pricePol: "0.025 POL",
-    royalty: "10% to Aura Waves",
-    supply: "1 of 30",
-  },
+const MUSIC_NFT_ADDRESS = process.env.NEXT_PUBLIC_MUSIC_NFT_ADDRESS ?? "";
+
+const MUSIC_NFT_ABI = [
+  "function totalMinted() view returns (uint256)",
+  "function ownerOf(uint256 tokenId) view returns (address)",
+  "function tokenURI(uint256 tokenId) view returns (string)",
+  "function itemDetails(uint256 tokenId) view returns (uint8 category,address originalCreator,uint256 mintedAt)",
+  "function listings(uint256 tokenId) view returns (address seller,uint256 price)",
+  "function royaltyInfo(uint256 tokenId,uint256 salePrice) view returns (address receiver,uint256 royaltyAmount)",
+  "function mintMusicNFT(address recipient,string uri,address royaltyReceiver,uint96 royaltyFeeBps,uint8 category) returns (uint256)",
+  "function listNFT(uint256 tokenId,uint256 price)",
+  "function cancelListing(uint256 tokenId)",
+  "function buyNFT(uint256 tokenId) payable",
 ];
 
-const categoryTabs = [
-  { key: "ALL", label: "All Items" },
-  { key: "SONG", label: "Audio & Songs" },
-  { key: "ALBUM", label: "Album Passes" },
-  { key: "VIP_PASS", label: "VIP Passes" },
-];
+const categories = ["SONG", "ALBUM", "VIP PASS", "COLLECTIBLE"];
+
+type NFTItem = {
+  tokenId: number;
+  owner: string;
+  uri: string;
+  category: number;
+  creator: string;
+  seller: string;
+  price: bigint;
+};
+
+function shortAddress(value: string) {
+  return `${value.slice(0, 6)}...${value.slice(-4)}`;
+}
+
+function errorMessage(error: unknown) {
+  if (typeof error === "object" && error !== null) {
+    const candidate = error as {
+      shortMessage?: string;
+      reason?: string;
+      message?: string;
+    };
+    return candidate.shortMessage ?? candidate.reason ?? candidate.message ?? "Transaction failed.";
+  }
+  return "Transaction failed.";
+}
+
+async function getContract(withSigner: boolean) {
+  if (!window.ethereum) throw new Error("MetaMask is not installed.");
+  if (!MUSIC_NFT_ADDRESS) {
+    throw new Error("NEXT_PUBLIC_MUSIC_NFT_ADDRESS is not configured.");
+  }
+
+  const provider = new BrowserProvider(
+    window.ethereum as unknown as Eip1193Provider,
+  );
+  const runner = withSigner ? await provider.getSigner() : provider;
+  return new Contract(MUSIC_NFT_ADDRESS, MUSIC_NFT_ABI, runner);
+}
 
 export default function MarketplacePage() {
-  const { isConnected, connectWallet } = useWallet();
+  const { address, isConnected, connectWallet } = useWallet();
+  const [items, setItems] = useState<NFTItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [busy, setBusy] = useState("");
+  const [notice, setNotice] = useState("");
+  const [uri, setUri] = useState("ipfs://musiccoin-demo-metadata");
+  const [royalty, setRoyalty] = useState("10");
+  const [category, setCategory] = useState(0);
 
-  const [playingId, setPlayingId] = useState<number | null>(null);
-  const [purchasedId, setPurchasedId] = useState<number | null>(null);
-  const [selectedCategory, setSelectedCategory] = useState("ALL");
+  const loadNFTs = useCallback(async () => {
+    if (!isConnected || !address) return;
+    setLoading(true);
+    setNotice("");
 
-  const filteredItems = nftItems.filter(
-    (item) =>
-      selectedCategory === "ALL" || item.category === selectedCategory,
-  );
+    try {
+      const contract = await getContract(false);
+      const total = Number(await contract.totalMinted());
+      const loaded = await Promise.all(
+        Array.from({ length: total }, async (_, index) => {
+          const tokenId = index + 1;
+          const [owner, tokenUri, details, listing] = await Promise.all([
+            contract.ownerOf(tokenId) as Promise<string>,
+            contract.tokenURI(tokenId) as Promise<string>,
+            contract.itemDetails(tokenId),
+            contract.listings(tokenId),
+          ]);
 
-  function togglePlay(id: number) {
-    setPlayingId((currentId) => (currentId === id ? null : id));
-  }
+          return {
+            tokenId,
+            owner,
+            uri: tokenUri,
+            category: Number(details.category),
+            creator: details.originalCreator as string,
+            seller: listing.seller as string,
+            price: listing.price as bigint,
+          } satisfies NFTItem;
+        }),
+      );
+      setItems(loaded.reverse());
+    } catch (error) {
+      setNotice(errorMessage(error));
+    } finally {
+      setLoading(false);
+    }
+  }, [address, isConnected]);
 
-  function handleBuyNFT(id: number) {
-    if (!isConnected) {
-      connectWallet();
+  useEffect(() => {
+    void loadNFTs();
+  }, [loadNFTs]);
+
+  async function mintNFT() {
+    if (!isConnected || !address) {
+      await connectWallet();
       return;
     }
+    if (!uri.trim()) return setNotice("Enter a metadata URI.");
 
-    setPurchasedId(id);
+    const royaltyPercent = Number(royalty);
+    if (!Number.isFinite(royaltyPercent) || royaltyPercent < 0 || royaltyPercent > 25) {
+      return setNotice("Royalty must be between 0% and 25%.");
+    }
 
-    window.setTimeout(() => {
-      setPurchasedId(null);
-      window.alert(
-        "NFT successfully collected! Added to your Web3 collection.",
+    setBusy("mint");
+    setNotice("Confirm minting in MetaMask...");
+    try {
+      const contract = await getContract(true);
+      const tx = await contract.mintMusicNFT(
+        address,
+        uri.trim(),
+        royaltyPercent > 0 ? address : ZeroAddress,
+        Math.round(royaltyPercent * 100),
+        category,
       );
-    }, 1200);
+      await tx.wait();
+      setNotice("NFT minted successfully on the blockchain.");
+      await loadNFTs();
+    } catch (error) {
+      setNotice(errorMessage(error));
+    } finally {
+      setBusy("");
+    }
   }
+
+  async function listNFT(tokenId: number) {
+    const price = window.prompt("Enter listing price in test POL:", "0.01");
+    if (!price) return;
+
+    setBusy(`list-${tokenId}`);
+    setNotice("Confirm listing in MetaMask...");
+    try {
+      const contract = await getContract(true);
+      const tx = await contract.listNFT(tokenId, parseEther(price));
+      await tx.wait();
+      setNotice(`NFT #${tokenId} listed successfully.`);
+      await loadNFTs();
+    } catch (error) {
+      setNotice(errorMessage(error));
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function cancelListing(tokenId: number) {
+    setBusy(`cancel-${tokenId}`);
+    try {
+      const contract = await getContract(true);
+      const tx = await contract.cancelListing(tokenId);
+      await tx.wait();
+      setNotice(`Listing for NFT #${tokenId} cancelled.`);
+      await loadNFTs();
+    } catch (error) {
+      setNotice(errorMessage(error));
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function buyNFT(item: NFTItem) {
+    setBusy(`buy-${item.tokenId}`);
+    setNotice("Confirm purchase in MetaMask...");
+    try {
+      const contract = await getContract(true);
+      const tx = await contract.buyNFT(item.tokenId, { value: item.price });
+      await tx.wait();
+      setNotice(`NFT #${item.tokenId} purchased successfully.`);
+      await loadNFTs();
+    } catch (error) {
+      setNotice(errorMessage(error));
+    } finally {
+      setBusy("");
+    }
+  }
+
+  const normalizedAddress = address?.toLowerCase();
 
   return (
     <main className="mx-auto max-w-7xl px-4 py-12 sm:px-6">
       <section className="mx-auto mb-10 max-w-3xl text-center">
         <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-pink-500/30 bg-pink-950/30 px-3.5 py-1 text-xs font-semibold text-pink-300">
-          <Sparkles className="h-3.5 w-3.5" />
-          ERC-2981 Automated Royalties
+          <Music2 className="h-3.5 w-3.5" /> Real ERC-721 + ERC-2981 Marketplace
         </div>
-
-        <h1 className="text-3xl font-extrabold tracking-tight text-white sm:text-5xl">
-          Music &amp; Collectible NFT Marketplace
+        <h1 className="text-3xl font-extrabold text-white sm:text-5xl">
+          Music NFT Marketplace
         </h1>
-
         <p className="mt-3 text-sm text-neutral-400">
-          Collect exclusive audio tracks, festival passes and backstage
-          memorabilia directly from verified artists.
+          Mint, list and purchase collectibles through MetaMask. Royalties are paid automatically.
         </p>
       </section>
 
-      <div className="mb-10 flex flex-wrap items-center justify-center gap-2">
-        {categoryTabs.map((tab) => (
-          <button
-            key={tab.key}
-            type="button"
-            onClick={() => setSelectedCategory(tab.key)}
-            className={`rounded-xl px-4 py-2 text-xs font-semibold transition-all ${
-              selectedCategory === tab.key
-                ? "bg-purple-600 text-white shadow-lg shadow-purple-600/25"
-                : "border border-neutral-800 bg-neutral-900 text-neutral-400 hover:text-white"
-            }`}
-          >
-            {tab.label}
+      <section className="mb-10 rounded-3xl border border-neutral-800 bg-neutral-900/70 p-6">
+        <h2 className="mb-5 flex items-center gap-2 text-xl font-bold text-white">
+          <Plus className="h-5 w-5 text-purple-400" /> Mint a Music NFT
+        </h2>
+        <div className="grid gap-4 md:grid-cols-3">
+          <label className="md:col-span-3 text-sm text-neutral-300">
+            Metadata URI
+            <input value={uri} onChange={(event) => setUri(event.target.value)} className="mt-2 w-full rounded-xl border border-neutral-700 bg-neutral-950 px-4 py-3 text-white outline-none focus:border-purple-500" />
+          </label>
+          <label className="text-sm text-neutral-300">
+            Category
+            <select value={category} onChange={(event) => setCategory(Number(event.target.value))} className="mt-2 w-full rounded-xl border border-neutral-700 bg-neutral-950 px-4 py-3 text-white">
+              {categories.map((name, index) => <option key={name} value={index}>{name}</option>)}
+            </select>
+          </label>
+          <label className="text-sm text-neutral-300">
+            Royalty percentage
+            <input type="number" min="0" max="25" step="0.1" value={royalty} onChange={(event) => setRoyalty(event.target.value)} className="mt-2 w-full rounded-xl border border-neutral-700 bg-neutral-950 px-4 py-3 text-white" />
+          </label>
+          <button type="button" onClick={() => void mintNFT()} disabled={busy === "mint"} className="mt-6 rounded-xl bg-purple-600 px-4 py-3 font-semibold text-white hover:bg-purple-500 disabled:opacity-60">
+            {busy === "mint" ? "Minting..." : "Mint NFT"}
           </button>
-        ))}
+        </div>
+      </section>
+
+      {notice && <div className="mb-6 rounded-xl border border-purple-500/30 bg-purple-950/30 px-4 py-3 text-sm text-purple-200">{notice}</div>}
+
+      <div className="mb-5 flex items-center justify-between">
+        <h2 className="text-xl font-bold text-white">On-chain Collection</h2>
+        <button type="button" onClick={() => void loadNFTs()} className="rounded-lg border border-neutral-700 p-2 text-neutral-300 hover:text-white" aria-label="Refresh NFTs">
+          <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+        </button>
       </div>
 
-      <section className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {filteredItems.map((item) => (
-          <article
-            key={item.id}
-            className="group flex flex-col justify-between overflow-hidden rounded-3xl border border-neutral-800 bg-neutral-900/60 transition-all hover:border-purple-500/40"
-          >
-            <div>
-              <div className="relative h-60 w-full overflow-hidden">
-                <Image
-                  src={item.image}
-                  alt={item.title}
-                  fill
-                  sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                  className="object-cover transition-transform duration-500 group-hover:scale-105"
-                />
-
-                <button
-                  type="button"
-                  onClick={() => togglePlay(item.id)}
-                  className="absolute bottom-3 left-3 flex h-10 w-10 items-center justify-center rounded-full bg-purple-600 text-white shadow-lg transition-transform hover:scale-110"
-                  title={
-                    playingId === item.id
-                      ? "Pause audio preview"
-                      : "Play audio preview"
-                  }
-                  aria-label={
-                    playingId === item.id
-                      ? `Pause preview for ${item.title}`
-                      : `Play preview for ${item.title}`
-                  }
-                >
-                  {playingId === item.id ? (
-                    <Pause className="h-5 w-5" />
-                  ) : (
-                    <Play className="ml-0.5 h-5 w-5" />
-                  )}
-                </button>
-
-                <div className="absolute right-3 top-3 rounded-md bg-neutral-950/80 px-2.5 py-1 font-mono text-[11px] text-purple-300 backdrop-blur-md">
-                  {item.supply}
+      {!isConnected ? (
+        <button type="button" onClick={() => void connectWallet()} className="rounded-xl bg-purple-600 px-5 py-3 font-semibold text-white">Connect Wallet</button>
+      ) : loading ? (
+        <div className="flex items-center gap-2 text-neutral-400"><LoaderCircle className="h-5 w-5 animate-spin" /> Loading blockchain NFTs...</div>
+      ) : items.length === 0 ? (
+        <div className="rounded-3xl border border-dashed border-neutral-700 p-12 text-center text-neutral-400">No NFTs minted yet. Mint the first one above.</div>
+      ) : (
+        <section className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {items.map((item) => {
+            const owned = item.owner.toLowerCase() === normalizedAddress;
+            const listed = item.price > BigInt(0);
+            const ownListing = item.seller.toLowerCase() === normalizedAddress;
+            return (
+              <article key={item.tokenId} className="overflow-hidden rounded-3xl border border-neutral-800 bg-neutral-900/70">
+                <div className="flex h-48 items-center justify-center bg-gradient-to-br from-purple-900 via-fuchsia-900 to-neutral-950">
+                  <Music2 className="h-20 w-20 text-white/80" />
                 </div>
-              </div>
-
-              <div className="p-5">
-                <div className="mb-1 flex items-center justify-between gap-3 text-xs text-neutral-400">
-                  <span className="font-semibold text-purple-400">
-                    {item.artist}
-                  </span>
-
-                  <span className="flex items-center gap-1 text-right text-emerald-400">
-                    <ShieldCheck className="h-3 w-3 shrink-0" />
-                    {item.royalty}
-                  </span>
+                <div className="p-5">
+                  <div className="mb-2 flex justify-between text-xs text-purple-300"><span>{categories[item.category]}</span><span>#{item.tokenId}</span></div>
+                  <h3 className="truncate font-bold text-white" title={item.uri}>{item.uri}</h3>
+                  <div className="mt-3 space-y-1 text-xs text-neutral-400">
+                    <p>Owner: {shortAddress(item.owner)}</p>
+                    <p>Creator: {shortAddress(item.creator)}</p>
+                  </div>
+                  {listed && <p className="mt-4 text-lg font-bold text-white">{formatEther(item.price)} test POL</p>}
+                  <div className="mt-4">
+                    {owned && !listed && <button type="button" onClick={() => void listNFT(item.tokenId)} disabled={busy !== ""} className="w-full rounded-xl bg-purple-600 px-4 py-2 text-sm font-semibold text-white">List for Sale</button>}
+                    {ownListing && <button type="button" onClick={() => void cancelListing(item.tokenId)} disabled={busy !== ""} className="w-full rounded-xl border border-red-500/50 px-4 py-2 text-sm font-semibold text-red-300">Cancel Listing</button>}
+                    {listed && !ownListing && <button type="button" onClick={() => void buyNFT(item)} disabled={busy !== ""} className="flex w-full items-center justify-center gap-2 rounded-xl bg-purple-600 px-4 py-2 text-sm font-semibold text-white"><Coins className="h-4 w-4" /> Buy NFT</button>}
+                    {!owned && !listed && <p className="text-center text-xs text-neutral-500">Not listed for sale</p>}
+                  </div>
                 </div>
-
-                <h2 className="text-base font-bold text-white transition-colors group-hover:text-purple-300">
-                  {item.title}
-                </h2>
-              </div>
-            </div>
-
-            <div className="p-5 pt-0">
-              <div className="flex items-center justify-between border-t border-neutral-800 pt-4">
-                <div>
-                  <span className="block text-sm font-bold text-white">
-                    {item.priceMusic}
-                  </span>
-                  <span className="text-[11px] text-neutral-500">
-                    {item.pricePol}
-                  </span>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => handleBuyNFT(item.id)}
-                  disabled={purchasedId === item.id}
-                  className="flex items-center gap-1.5 rounded-xl bg-purple-600 px-4 py-2 text-xs font-semibold text-white shadow-md shadow-purple-600/20 transition-colors hover:bg-purple-500 disabled:cursor-wait disabled:opacity-70"
-                >
-                  {purchasedId === item.id ? (
-                    <>
-                      <Check className="h-3.5 w-3.5 text-emerald-300" />
-                      Settling...
-                    </>
-                  ) : (
-                    <>
-                      <Coins className="h-3.5 w-3.5" />
-                      Buy NFT
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-          </article>
-        ))}
-      </section>
+              </article>
+            );
+          })}
+        </section>
+      )}
     </main>
   );
 }

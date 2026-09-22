@@ -35,28 +35,28 @@ describe("MusicCoin Platform Smart Contract Suite", function () {
       "MUSIC",
       ethers.parseEther("1000000"), // 1M supply
       owner.address
-    )) as FanToken;
+    )) as unknown as FanToken;
     await fanToken.waitForDeployment();
 
     // 2. Deploy ArtistIdentity
     const ArtistIdentityFactory = await ethers.getContractFactory("ArtistIdentity");
-    artistIdentity = (await ArtistIdentityFactory.deploy(owner.address)) as ArtistIdentity;
+    artistIdentity = (await ArtistIdentityFactory.deploy(owner.address)) as unknown as ArtistIdentity;
     await artistIdentity.waitForDeployment();
 
     // 3. Deploy MusicNFT
     const MusicNFTFactory = await ethers.getContractFactory("MusicNFT");
-    musicNFT = (await MusicNFTFactory.deploy(owner.address)) as MusicNFT;
+   musicNFT = (await MusicNFTFactory.deploy(owner.address)) as unknown as MusicNFT;
     await musicNFT.waitForDeployment();
 
     // 4. Deploy EventTicket
     const EventTicketFactory = await ethers.getContractFactory("EventTicket");
-    eventTicket = (await EventTicketFactory.deploy(owner.address)) as EventTicket;
+    eventTicket = (await EventTicketFactory.deploy(owner.address)) as unknown as EventTicket;
     await eventTicket.waitForDeployment();
     await eventTicket.setGateKeeper(gateKeeper.address, true);
 
     // 5. Deploy RoyaltyDistribution
     const RoyaltyDistFactory = await ethers.getContractFactory("RoyaltyDistribution");
-    royaltyDist = (await RoyaltyDistFactory.deploy(owner.address)) as RoyaltyDistribution;
+    royaltyDist = (await RoyaltyDistFactory.deploy(owner.address)) as unknown as RoyaltyDistribution;
     await royaltyDist.waitForDeployment();
   });
 
