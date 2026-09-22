@@ -9,8 +9,35 @@ import React, {
   useState,
 } from "react";
 
-const AMOY_CHAIN_ID = "0x13882";
-const AMOY_CHAIN_NAME = "Polygon Amoy";
+const USE_LOCAL_BLOCKCHAIN =
+  process.env.NEXT_PUBLIC_BLOCKCHAIN_NETWORK === "localhost";
+
+const TARGET_CHAIN_ID = USE_LOCAL_BLOCKCHAIN
+  ? "0x7a69"
+  : "0x13882";
+
+const TARGET_CHAIN_NAME = USE_LOCAL_BLOCKCHAIN
+  ? "Hardhat Local"
+  : "Polygon Amoy";
+
+const TARGET_CURRENCY = USE_LOCAL_BLOCKCHAIN
+  ? {
+      name: "Local ETH",
+      symbol: "ETH",
+      decimals: 18,
+    }
+  : {
+      name: "POL",
+      symbol: "POL",
+      decimals: 18,
+    };
+
+const TARGET_RPC_URLS = USE_LOCAL_BLOCKCHAIN
+  ? ["http://127.0.0.1:8545"]
+  : [
+      "https://polygon-amoy.drpc.org",
+      "https://80002.rpc.thirdweb.com",
+    ];
 
 type RequestArguments = {
   method: string;
@@ -65,9 +92,7 @@ function formatUnits(
     .slice(0, precision)
     .replace(/0+$/, "");
 
-  return fraction
-    ? `${whole}.${fraction}`
-    : whole.toString();
+  return fraction ? `${whole}.${fraction}` : whole.toString();
 }
 
 function encodeBalanceOf(address: string) {
@@ -83,9 +108,7 @@ function getErrorCode(error: unknown) {
     error !== null &&
     "code" in error
   ) {
-    return Number(
-      (error as { code?: number }).code
-    );
+    return Number((error as { code?: number }).code);
   }
 
   return undefined;
@@ -109,7 +132,7 @@ function getErrorMessage(error: unknown) {
   return "Unknown wallet error.";
 }
 
-async function ensureAmoyNetwork(
+async function ensureTargetNetwork(
   provider: EthereumProvider
 ) {
   const currentChain = (await provider.request({
@@ -118,7 +141,7 @@ async function ensureAmoyNetwork(
 
   if (
     currentChain.toLowerCase() ===
-    AMOY_CHAIN_ID.toLowerCase()
+    TARGET_CHAIN_ID.toLowerCase()
   ) {
     return;
   }
@@ -128,7 +151,7 @@ async function ensureAmoyNetwork(
       method: "wallet_switchEthereumChain",
       params: [
         {
-          chainId: AMOY_CHAIN_ID,
+          chainId: TARGET_CHAIN_ID,
         },
       ],
     });
@@ -137,26 +160,23 @@ async function ensureAmoyNetwork(
       throw switchError;
     }
 
+    const networkConfiguration = {
+      chainId: TARGET_CHAIN_ID,
+      chainName: TARGET_CHAIN_NAME,
+      nativeCurrency: TARGET_CURRENCY,
+      rpcUrls: TARGET_RPC_URLS,
+      ...(USE_LOCAL_BLOCKCHAIN
+        ? {}
+        : {
+            blockExplorerUrls: [
+              "https://amoy.polygonscan.com",
+            ],
+          }),
+    };
+
     await provider.request({
       method: "wallet_addEthereumChain",
-      params: [
-        {
-          chainId: AMOY_CHAIN_ID,
-          chainName: AMOY_CHAIN_NAME,
-          nativeCurrency: {
-            name: "POL",
-            symbol: "POL",
-            decimals: 18,
-          },
-          rpcUrls: [
-            "https://polygon-amoy.drpc.org",
-            "https://80002.rpc.thirdweb.com",
-          ],
-          blockExplorerUrls: [
-            "https://amoy.polygonscan.com",
-          ],
-        },
-      ],
+      params: [networkConfiguration],
     });
   }
 }
@@ -198,65 +218,63 @@ export function WalletProvider({
       provider: EthereumProvider,
       walletAddress: string
     ) => {
-      const rawBalance =
-        (await provider.request({
-          method: "eth_getBalance",
-          params: [
-            walletAddress,
-            "latest",
-          ],
-        })) as string;
+      const rawBalance = (await provider.request({
+        method: "eth_getBalance",
+        params: [walletAddress, "latest"],
+      })) as string;
 
       setBalance(
-        formatUnits(
-          BigInt(rawBalance),
-          18
-        )
+        formatUnits(BigInt(rawBalance), 18)
       );
 
       const tokenAddress =
-        process.env
-          .NEXT_PUBLIC_MUSIC_TOKEN_ADDRESS;
+        process.env.NEXT_PUBLIC_MUSIC_TOKEN_ADDRESS;
 
       if (!tokenAddress) {
-        setMusicBalance(
-          "Not configured"
-        );
+        setMusicBalance("Not configured");
         return;
       }
 
-      const rawDecimals =
-        (await provider.request({
-          method: "eth_call",
-          params: [
-            {
-              to: tokenAddress,
-              data: "0x313ce567",
-            },
-            "latest",
-          ],
-        })) as string;
+      const contractCode = (await provider.request({
+        method: "eth_getCode",
+        params: [tokenAddress, "latest"],
+      })) as string;
 
-      const rawTokenBalance =
-        (await provider.request({
-          method: "eth_call",
-          params: [
-            {
-              to: tokenAddress,
-              data: encodeBalanceOf(
-                walletAddress
-              ),
-            },
-            "latest",
-          ],
-        })) as string;
+      if (
+        !contractCode ||
+        contractCode === "0x" ||
+        contractCode === "0x0"
+      ) {
+        setMusicBalance("Not deployed");
+        return;
+      }
+
+      const rawDecimals = (await provider.request({
+        method: "eth_call",
+        params: [
+          {
+            to: tokenAddress,
+            data: "0x313ce567",
+          },
+          "latest",
+        ],
+      })) as string;
+
+      const rawTokenBalance = (await provider.request({
+        method: "eth_call",
+        params: [
+          {
+            to: tokenAddress,
+            data: encodeBalanceOf(walletAddress),
+          },
+          "latest",
+        ],
+      })) as string;
 
       setMusicBalance(
         formatUnits(
           BigInt(rawTokenBalance),
-          Number(
-            BigInt(rawDecimals)
-          ),
+          Number(BigInt(rawDecimals)),
           2
         )
       );
@@ -264,189 +282,163 @@ export function WalletProvider({
     []
   );
 
-  const syncCurrentNetwork =
-    useCallback(
-      async (
-        provider: EthereumProvider,
-        walletAddress: string
-      ) => {
-        try {
-          const chainId =
-            (await provider.request({
-              method: "eth_chainId",
-            })) as string;
+  const syncCurrentNetwork = useCallback(
+    async (
+      provider: EthereumProvider,
+      walletAddress: string
+    ) => {
+      try {
+        const chainId = (await provider.request({
+          method: "eth_chainId",
+        })) as string;
 
-          if (
-            chainId.toLowerCase() ===
-            AMOY_CHAIN_ID.toLowerCase()
-          ) {
-            setNetwork(
-              AMOY_CHAIN_NAME
-            );
+        if (
+          chainId.toLowerCase() ===
+          TARGET_CHAIN_ID.toLowerCase()
+        ) {
+          setNetwork(TARGET_CHAIN_NAME);
 
-            await loadBalances(
-              provider,
-              walletAddress
-            );
-
-            setError("");
-            return;
-          }
-
-          setNetwork(
-            `Connected on chain ${parseInt(
-              chainId,
-              16
-            )}`
+          await loadBalances(
+            provider,
+            walletAddress
           );
 
-          setBalance("0.00");
-          setMusicBalance(
-            "Not configured"
-          );
-        } catch (networkError) {
-          console.error(
-            "Unable to read wallet network",
-            networkError
-          );
-
-          setNetwork(
-            "Wallet connected — network unavailable"
-          );
-
-          setBalance("0.00");
-          setMusicBalance(
-            "Not configured"
-          );
+          setError("");
+          return;
         }
-      },
-      [loadBalances]
-    );
 
-  const saveConnectedAccount =
-    useCallback(
-      async (
-        provider: EthereumProvider,
-        walletAddress: string
-      ) => {
-        setAddress(walletAddress);
+        setNetwork(
+          `Connected on chain ${parseInt(chainId, 16)}`
+        );
 
-        localStorage.setItem(
-          "mc_wallet",
-          walletAddress
+        setBalance("0.00");
+        setMusicBalance("Wrong network");
+      } catch (networkError) {
+        console.error(
+          "Unable to read wallet network",
+          networkError
+        );
+
+        setNetwork(
+          "Wallet connected — network unavailable"
+        );
+
+        setBalance("0.00");
+        setMusicBalance("Unavailable");
+      }
+    },
+    [loadBalances]
+  );
+
+  const saveConnectedAccount = useCallback(
+    async (
+      provider: EthereumProvider,
+      walletAddress: string
+    ) => {
+      setAddress(walletAddress);
+
+      localStorage.setItem(
+        "mc_wallet",
+        walletAddress
+      );
+
+      await syncCurrentNetwork(
+        provider,
+        walletAddress
+      );
+    },
+    [syncCurrentNetwork]
+  );
+
+  const connectWallet = useCallback(async () => {
+    setError("");
+
+    if (!window.ethereum) {
+      setError(
+        "Install MetaMask to connect a blockchain wallet."
+      );
+      return;
+    }
+
+    setIsConnecting(true);
+
+    try {
+      const accounts =
+        (await window.ethereum.request({
+          method: "eth_requestAccounts",
+        })) as string[];
+
+      const walletAddress = accounts[0];
+
+      if (!walletAddress) {
+        throw new Error(
+          "No wallet account was selected."
+        );
+      }
+
+      setAddress(walletAddress);
+
+      localStorage.setItem(
+        "mc_wallet",
+        walletAddress
+      );
+
+      try {
+        await ensureTargetNetwork(
+          window.ethereum
         );
 
         await syncCurrentNetwork(
-          provider,
+          window.ethereum,
           walletAddress
         );
-      },
-      [syncCurrentNetwork]
-    );
-
-  const connectWallet =
-    useCallback(async () => {
-      setError("");
-
-      if (!window.ethereum) {
-        setError(
-          "Install MetaMask to connect a Polygon wallet."
-        );
-        return;
-      }
-
-      setIsConnecting(true);
-
-      try {
-        const accounts =
-          (await window.ethereum.request({
-            method:
-              "eth_requestAccounts",
-          })) as string[];
-
-        const walletAddress =
-          accounts[0];
-
-        if (!walletAddress) {
-          throw new Error(
-            "No wallet account was selected."
-          );
-        }
-
-        // Save the account before attempting
-        // the network switch.
-        setAddress(walletAddress);
-
-        localStorage.setItem(
-          "mc_wallet",
-          walletAddress
-        );
-
-        try {
-          await ensureAmoyNetwork(
-            window.ethereum
-          );
-
-          await syncCurrentNetwork(
-            window.ethereum,
-            walletAddress
-          );
-        } catch (networkError) {
-          console.error(
-            "Polygon Amoy connection failed",
-            networkError
-          );
-
-          setNetwork(
-            "Wallet connected — Amoy unavailable"
-          );
-
-          setBalance("0.00");
-          setMusicBalance(
-            "Not configured"
-          );
-
-          setError(
-            `Wallet connected successfully, but Polygon Amoy could not be opened: ${getErrorMessage(
-              networkError
-            )}`
-          );
-        }
-      } catch (walletError) {
+      } catch (networkError) {
         console.error(
-          "Wallet connection failed",
-          walletError
+          `${TARGET_CHAIN_NAME} connection failed`,
+          networkError
         );
+
+        setNetwork(
+          `Wallet connected — ${TARGET_CHAIN_NAME} unavailable`
+        );
+
+        setBalance("0.00");
+        setMusicBalance("Unavailable");
 
         setError(
-          getErrorMessage(
-            walletError
-          )
+          `Wallet connected successfully, but ${TARGET_CHAIN_NAME} could not be opened: ${getErrorMessage(
+            networkError
+          )}`
         );
-      } finally {
-        setIsConnecting(false);
       }
-    }, [syncCurrentNetwork]);
+    } catch (walletError) {
+      console.error(
+        "Wallet connection failed",
+        walletError
+      );
 
-  const disconnectWallet =
-    useCallback(() => {
-      clearWallet();
-    }, [clearWallet]);
+      setError(getErrorMessage(walletError));
+    } finally {
+      setIsConnecting(false);
+    }
+  }, [syncCurrentNetwork]);
+
+  const disconnectWallet = useCallback(() => {
+    clearWallet();
+  }, [clearWallet]);
 
   useEffect(() => {
     if (!window.ethereum) {
       return;
     }
 
-    const provider =
-      window.ethereum;
+    const provider = window.ethereum;
 
     async function restoreConnection() {
       try {
-        const accounts =
-          (await provider.request({
-            method: "eth_accounts",
-          })) as string[];
+        const accounts = (await provider.request({
+          method: "eth_accounts",
+        })) as string[];
 
         if (accounts[0]) {
           await saveConnectedAccount(
@@ -469,8 +461,7 @@ export function WalletProvider({
     const handleAccountsChanged = (
       ...args: unknown[]
     ) => {
-      const accounts =
-        args[0] as string[];
+      const accounts = args[0] as string[];
 
       if (!accounts?.[0]) {
         clearWallet();
@@ -485,9 +476,7 @@ export function WalletProvider({
 
     const handleChainChanged = () => {
       const savedAddress =
-        localStorage.getItem(
-          "mc_wallet"
-        );
+        localStorage.getItem("mc_wallet");
 
       if (savedAddress) {
         void syncCurrentNetwork(
@@ -529,8 +518,7 @@ export function WalletProvider({
   const value = useMemo(
     () => ({
       address,
-      isConnected:
-        Boolean(address),
+      isConnected: Boolean(address),
       isConnecting,
       balance,
       musicBalance,
@@ -552,17 +540,14 @@ export function WalletProvider({
   );
 
   return (
-    <WalletContext.Provider
-      value={value}
-    >
+    <WalletContext.Provider value={value}>
       {children}
     </WalletContext.Provider>
   );
 }
 
 export function useWallet() {
-  const context =
-    useContext(WalletContext);
+  const context = useContext(WalletContext);
 
   if (!context) {
     throw new Error(
