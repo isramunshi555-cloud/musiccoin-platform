@@ -41,38 +41,88 @@ type TicketQrPayload = {
 
 export default function ScannerPage() {
   const router = useRouter();
+
   const qrScannerRef = useRef<Html5Qrcode | null>(null);
 
   const [ticketId, setTicketId] = useState("");
   const [verificationHash, setVerificationHash] =
     useState("");
+
   const [result, setResult] = useState<ScanResult | null>(
     null,
   );
+
   const [error, setError] = useState("");
   const [scanMessage, setScanMessage] = useState("");
+
   const [scanning, setScanning] = useState(false);
+
   const [cameraStarting, setCameraStarting] =
     useState(false);
-  const [cameraActive, setCameraActive] = useState(false);
+
+  const [cameraActive, setCameraActive] =
+    useState(false);
+
+  function forceStopBrowserCamera() {
+    if (typeof document === "undefined") {
+      return;
+    }
+
+    const reader = document.getElementById(
+      "musiccoin-qr-reader",
+    );
+
+    if (!reader) {
+      return;
+    }
+
+    const videos = reader.querySelectorAll("video");
+
+    videos.forEach((video) => {
+      const stream = video.srcObject;
+
+      if (stream instanceof MediaStream) {
+        stream.getTracks().forEach((track) => {
+          track.stop();
+        });
+      }
+
+      video.pause();
+      video.srcObject = null;
+
+      video.removeAttribute("src");
+
+      try {
+        video.load();
+      } catch {
+        // Ignore browser-specific video cleanup errors.
+      }
+    });
+  }
 
   useEffect(() => {
     return () => {
       const scanner = qrScannerRef.current;
 
+      qrScannerRef.current = null;
+
       if (scanner) {
-        scanner
+        void scanner
           .stop()
           .catch(() => {
-            // The camera may already be stopped.
+            // Scanner may already be stopped.
           })
           .finally(() => {
+            forceStopBrowserCamera();
+
             try {
               scanner.clear();
             } catch {
-              // The scanner element may already be removed.
+              // Reader may already be removed.
             }
           });
+      } else {
+        forceStopBrowserCamera();
       }
     };
   }, []);
@@ -88,7 +138,9 @@ export default function ScannerPage() {
       !parsedData.ticket_id.trim() ||
       !parsedData.verification_hash.trim()
     ) {
-      throw new Error("Invalid MusicCoin ticket QR code.");
+      throw new Error(
+        "Invalid MusicCoin ticket QR code.",
+      );
     }
 
     return {
@@ -101,20 +153,24 @@ export default function ScannerPage() {
   async function stopCamera() {
     const scanner = qrScannerRef.current;
 
+    qrScannerRef.current = null;
+
     if (scanner) {
       try {
         await scanner.stop();
       } catch {
-        // The scanner might already be stopped.
+        // Scanner may already be stopped.
       }
+    }
 
+    forceStopBrowserCamera();
+
+    if (scanner) {
       try {
         scanner.clear();
       } catch {
-        // The scanner container might already be clear.
+        // Reader may already be cleared.
       }
-
-      qrScannerRef.current = null;
     }
 
     setCameraActive(false);
@@ -126,9 +182,14 @@ export default function ScannerPage() {
       const qrPayload = parseQrPayload(decodedText);
 
       setTicketId(qrPayload.ticket_id);
-      setVerificationHash(qrPayload.verification_hash);
+
+      setVerificationHash(
+        qrPayload.verification_hash,
+      );
+
       setResult(null);
       setError("");
+
       setScanMessage(
         "Ticket QR captured. Select “Verify and check in” to validate admission.",
       );
@@ -142,32 +203,43 @@ export default function ScannerPage() {
   }
 
   async function startCamera() {
-    const accessToken = localStorage.getItem("access_token");
+    const accessToken =
+      localStorage.getItem("access_token");
 
     if (!accessToken) {
       sessionStorage.setItem(
         "post_login_redirect",
         "/scanner",
       );
+
       router.push("/login");
+
       return;
     }
 
     try {
+      await stopCamera();
+
       setCameraStarting(true);
       setCameraActive(true);
+
       setError("");
       setScanMessage("");
       setResult(null);
 
       await new Promise<void>((resolve) => {
-        window.requestAnimationFrame(() => resolve());
+        window.requestAnimationFrame(() =>
+          resolve(),
+        );
       });
 
-      const qrCodeModule = await import("html5-qrcode");
-      const scanner = new qrCodeModule.Html5Qrcode(
-        "musiccoin-qr-reader",
-      );
+      const qrCodeModule =
+        await import("html5-qrcode");
+
+      const scanner =
+        new qrCodeModule.Html5Qrcode(
+          "musiccoin-qr-reader",
+        );
 
       qrScannerRef.current = scanner;
 
@@ -187,7 +259,7 @@ export default function ScannerPage() {
           void handleQrDecoded(decodedText);
         },
         () => {
-          // Scanning continues until a valid QR is detected.
+          // Keep scanning until a valid QR is detected.
         },
       );
 
@@ -206,26 +278,34 @@ export default function ScannerPage() {
   ) {
     event.preventDefault();
 
-    const accessToken = localStorage.getItem("access_token");
+    const accessToken =
+      localStorage.getItem("access_token");
 
     if (!accessToken) {
       sessionStorage.setItem(
         "post_login_redirect",
         "/scanner",
       );
+
       router.push("/login");
+
       return;
     }
 
-    if (!ticketId.trim() || !verificationHash.trim()) {
+    if (
+      !ticketId.trim() ||
+      !verificationHash.trim()
+    ) {
       setError(
         "Scan a ticket QR code or enter both ticket details.",
       );
+
       return;
     }
 
     try {
       setScanning(true);
+
       setError("");
       setScanMessage("");
       setResult(null);
@@ -234,16 +314,25 @@ export default function ScannerPage() {
         "/tickets/check-in/",
         {
           ticket_id: ticketId.trim(),
-          verification_hash: verificationHash.trim(),
+
+          verification_hash:
+            verificationHash.trim(),
         },
       );
 
       setResult(response.data);
     } catch (requestError) {
       if (axios.isAxiosError(requestError)) {
-        if (requestError.response?.status === 401) {
-          localStorage.removeItem("access_token");
-          localStorage.removeItem("refresh_token");
+        if (
+          requestError.response?.status === 401
+        ) {
+          localStorage.removeItem(
+            "access_token",
+          );
+
+          localStorage.removeItem(
+            "refresh_token",
+          );
 
           sessionStorage.setItem(
             "post_login_redirect",
@@ -251,10 +340,12 @@ export default function ScannerPage() {
           );
 
           router.push("/login");
+
           return;
         }
 
-        const responseData = requestError.response?.data;
+        const responseData =
+          requestError.response?.data;
 
         if (
           responseData &&
@@ -262,25 +353,37 @@ export default function ScannerPage() {
           "detail" in responseData
         ) {
           setResult({
-            detail: String(responseData.detail),
+            detail: String(
+              responseData.detail,
+            ),
+
             valid: false,
+
             already_used: Boolean(
               responseData.already_used,
             ),
-            checked_in_at: responseData.checked_in_at,
+
+            checked_in_at:
+              responseData.checked_in_at,
           });
         } else if (
           responseData &&
           typeof responseData === "object"
         ) {
           setError(
-            Object.values(responseData).flat().join(" "),
+            Object.values(responseData)
+              .flat()
+              .join(" "),
           );
         } else {
-          setError("The ticket could not be verified.");
+          setError(
+            "The ticket could not be verified.",
+          );
         }
       } else {
-        setError("The ticket could not be verified.");
+        setError(
+          "The ticket could not be verified.",
+        );
       }
     } finally {
       setScanning(false);
@@ -292,7 +395,9 @@ export default function ScannerPage() {
 
     setTicketId("");
     setVerificationHash("");
+
     setResult(null);
+
     setError("");
     setScanMessage("");
   }
@@ -316,8 +421,9 @@ export default function ScannerPage() {
           </h1>
 
           <p className="mt-5 max-w-2xl text-lg leading-8 text-neutral-400">
-            Scan MusicCoin ticket QR codes, prevent duplicate
-            entry and record admissions securely.
+            Scan MusicCoin ticket QR codes,
+            prevent duplicate entry and record
+            admissions securely.
           </p>
         </div>
       </section>
@@ -335,8 +441,9 @@ export default function ScannerPage() {
               </h2>
 
               <p className="mt-1 text-sm text-neutral-500">
-                Scan the attendee&apos;s QR code or enter the
-                ticket details manually.
+                Scan the attendee&apos;s QR
+                code or enter the ticket details
+                manually.
               </p>
             </div>
           </div>
@@ -363,8 +470,9 @@ export default function ScannerPage() {
                 </p>
 
                 <p className="mt-2 max-w-sm text-sm leading-6 text-neutral-500">
-                  Open your camera and point it at the QR code
-                  displayed on the attendee&apos;s ticket.
+                  Open your camera and point it
+                  at the QR code displayed on
+                  the attendee&apos;s ticket.
                 </p>
               </div>
             )}
@@ -373,7 +481,9 @@ export default function ScannerPage() {
               {!cameraActive ? (
                 <button
                   type="button"
-                  onClick={() => void startCamera()}
+                  onClick={() =>
+                    void startCamera()
+                  }
                   disabled={cameraStarting}
                   className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-violet-600 px-5 py-3 font-semibold transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50"
                 >
@@ -383,6 +493,7 @@ export default function ScannerPage() {
                         className="animate-spin"
                         size={19}
                       />
+
                       Opening camera...
                     </>
                   ) : (
@@ -395,7 +506,9 @@ export default function ScannerPage() {
               ) : (
                 <button
                   type="button"
-                  onClick={() => void stopCamera()}
+                  onClick={() =>
+                    void stopCamera()
+                  }
                   className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-white/15 px-5 py-3 font-semibold transition hover:bg-white/5"
                 >
                   <CameraOff size={19} />
@@ -411,6 +524,7 @@ export default function ScannerPage() {
                 className="shrink-0"
                 size={20}
               />
+
               <p>{scanMessage}</p>
             </div>
           )}
@@ -432,7 +546,9 @@ export default function ScannerPage() {
                 type="text"
                 value={ticketId}
                 onChange={(event) =>
-                  setTicketId(event.target.value)
+                  setTicketId(
+                    event.target.value,
+                  )
                 }
                 required
                 placeholder="Scan the QR or paste the ticket UUID"
@@ -452,7 +568,9 @@ export default function ScannerPage() {
                 id="verificationHash"
                 value={verificationHash}
                 onChange={(event) =>
-                  setVerificationHash(event.target.value)
+                  setVerificationHash(
+                    event.target.value,
+                  )
                 }
                 required
                 rows={4}
@@ -467,6 +585,7 @@ export default function ScannerPage() {
                   className="shrink-0"
                   size={20}
                 />
+
                 <p>{error}</p>
               </div>
             )}
@@ -482,6 +601,7 @@ export default function ScannerPage() {
                     className="animate-spin"
                     size={20}
                   />
+
                   Verifying...
                 </>
               ) : (
@@ -535,12 +655,16 @@ export default function ScannerPage() {
                 <div className="mt-6 space-y-4 rounded-2xl bg-black/25 p-5 text-sm">
                   <ResultRow
                     label="Attendee"
-                    value={result.attendee_email}
+                    value={
+                      result.attendee_email
+                    }
                   />
 
                   <ResultRow
                     label="Event"
-                    value={result.event_title}
+                    value={
+                      result.event_title
+                    }
                   />
 
                   <ResultRow
@@ -554,7 +678,9 @@ export default function ScannerPage() {
                       result.checked_in_at
                         ? new Date(
                             result.checked_in_at,
-                          ).toLocaleString("en-IN")
+                          ).toLocaleString(
+                            "en-IN",
+                          )
                         : undefined
                     }
                   />
@@ -563,7 +689,9 @@ export default function ScannerPage() {
 
               <button
                 type="button"
-                onClick={() => void resetScanner()}
+                onClick={() =>
+                  void resetScanner()
+                }
                 className="mt-6 w-full rounded-xl border border-white/15 px-5 py-3 font-semibold transition hover:bg-white/5"
               >
                 Scan another ticket
@@ -581,24 +709,42 @@ export default function ScannerPage() {
               </h2>
 
               <ul className="mt-5 space-y-4 text-sm leading-6 text-neutral-400">
-                <li>• Ticket verification-code integrity</li>
-                <li>• Organizer authorization</li>
-                <li>• Event entry time window</li>
-                <li>• Cancelled ticket detection</li>
-                <li>• Duplicate check-in prevention</li>
+                <li>
+                  • Ticket verification-code
+                  integrity
+                </li>
+
+                <li>
+                  • Organizer authorization
+                </li>
+
+                <li>
+                  • Event entry time window
+                </li>
+
+                <li>
+                  • Cancelled ticket detection
+                </li>
+
+                <li>
+                  • Duplicate check-in
+                  prevention
+                </li>
               </ul>
             </div>
           )}
 
           <div className="rounded-2xl border border-amber-500/20 bg-amber-500/[0.06] p-5 text-sm leading-6 text-amber-100">
-            Only the event organizer or an administrator can
-            check attendees in.
+            Only the event organizer or an
+            administrator can check attendees
+            in.
           </div>
 
           <div className="rounded-2xl border border-blue-500/20 bg-blue-500/[0.06] p-5 text-sm leading-6 text-blue-100">
-            Camera scanning works on localhost or over HTTPS.
-            Manual verification remains available when camera
-            access is unavailable.
+            Camera scanning works on localhost
+            or over HTTPS. Manual verification
+            remains available when camera access
+            is unavailable.
           </div>
         </aside>
       </section>

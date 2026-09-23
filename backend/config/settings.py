@@ -45,6 +45,10 @@ INSTALLED_APPS = [
     "apps.artists.apps.ArtistsConfig",
     "apps.events.apps.EventsConfig",
     "apps.tickets.apps.TicketsConfig",
+    "apps.nft.apps.NftConfig",
+    "apps.wallet.apps.WalletConfig",
+    "apps.royalties.apps.RoyaltiesConfig",
+    "apps.analytics.apps.AnalyticsConfig",
 ]
 
 
@@ -171,6 +175,10 @@ LOCAL_DEVELOPMENT_ORIGINS = [
     "http://127.0.0.1:3001",
     "http://localhost:3002",
     "http://127.0.0.1:3002",
+    "http://localhost:3007",
+    "http://127.0.0.1:3007",
+    "http://localhost:3008",
+    "http://127.0.0.1:3008",
 ]
 
 for origin in LOCAL_DEVELOPMENT_ORIGINS:
