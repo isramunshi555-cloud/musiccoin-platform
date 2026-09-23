@@ -2,8 +2,12 @@
 
 import Image from "next/image";
 import Link from "next/link";
+
 import WalletConnect from "@/components/WalletConnect";
 import MusicNFTPanel from "@/components/MusicNFTPanel";
+import EventTicketPanel from "@/components/EventTicketPanel";
+import ArtistIdentityPanel from "@/components/ArtistIdentityPanel";
+import RoyaltyDistributionPanel from "@/components/RoyaltyDistributionPanel";
 
 import {
   ArrowRight,
@@ -102,6 +106,18 @@ export default function HomePage() {
 
           <div className="mx-auto mt-8 max-w-md rounded-2xl border border-neutral-800 bg-neutral-900/60 p-5 text-left backdrop-blur-xl">
             <MusicNFTPanel />
+          </div>
+
+          <div className="mx-auto mt-8 max-w-md rounded-2xl border border-neutral-800 bg-neutral-900/60 p-5 text-left backdrop-blur-xl">
+            <EventTicketPanel />
+          </div>
+
+          <div className="mx-auto mt-8 max-w-md rounded-2xl border border-neutral-800 bg-neutral-900/60 p-5 text-left backdrop-blur-xl">
+            <ArtistIdentityPanel />
+          </div>
+
+          <div className="mx-auto mt-8 max-w-md rounded-2xl border border-neutral-800 bg-neutral-900/60 p-5 text-left backdrop-blur-xl">
+            <RoyaltyDistributionPanel />
           </div>
         </div>
 

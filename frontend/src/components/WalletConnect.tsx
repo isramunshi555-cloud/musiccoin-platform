@@ -33,8 +33,8 @@ export default function WalletConnect() {
   const getTokenBalance = async () => {
     const { signer, address, chainId } = await connectWallet();
 
-    if (chainId !== 31337) {
-      throw new Error("Please switch MetaMask to Hardhat Local network.");
+    if (chainId !== 80002) {
+      throw new Error("Please switch MetaMask to Polygon Amoy.");
     }
 
     const token = new Contract(
@@ -87,8 +87,8 @@ export default function WalletConnect() {
 
       const { signer, chainId } = await connectWallet();
 
-      if (chainId !== 31337) {
-        throw new Error("Please switch MetaMask to Hardhat Local network.");
+      if (chainId !== 80002) {
+        throw new Error("Please switch MetaMask to Polygon Amoy.");
       }
 
       const token = new Contract(
@@ -129,8 +129,8 @@ export default function WalletConnect() {
 
       const { signer, chainId } = await connectWallet();
 
-      if (chainId !== 31337) {
-        throw new Error("Please switch MetaMask to Hardhat Local network.");
+      if (chainId !== 80002) {
+        throw new Error("Please switch MetaMask to Polygon Amoy.");
       }
 
       const token = new Contract(

@@ -12,7 +12,14 @@ const MUSIC_NFT_ABI = [
   "function tokenURI(uint256 tokenId) view returns (string)",
   "function mintMusicNFT(address recipient, string uri, address royaltyReceiver, uint96 royaltyFeeBps, uint8 category) returns (uint256)",
   "function listNFT(uint256 tokenId, uint256 price)",
+  "function listings(uint256 tokenId) view returns (address seller, uint256 price)",
+  "function buyNFT(uint256 tokenId) payable",
 ];
+
+const AMOY_GAS = {
+  maxPriorityFeePerGas: BigInt("30000000000"),
+  maxFeePerGas: BigInt("60000000000"),
+};
 
 export default function MusicNFTPanel() {
   const [message, setMessage] = useState("");
@@ -26,14 +33,17 @@ export default function MusicNFTPanel() {
   const [listPrice, setListPrice] = useState("");
   const [listing, setListing] = useState(false);
 
+  const [buyTokenId, setBuyTokenId] = useState("");
+  const [buying, setBuying] = useState(false);
+
   const checkNFTContract = async () => {
     try {
       setMessage("");
 
       const { signer, chainId } = await connectWallet();
 
-      if (chainId !== 31337) {
-        throw new Error("Please switch MetaMask to Hardhat Local network.");
+      if (chainId !== 80002) {
+        throw new Error("Please switch MetaMask to Polygon Amoy.");
       }
 
       const musicNFT = new Contract(
@@ -63,8 +73,8 @@ export default function MusicNFTPanel() {
 
       const { signer, address, chainId } = await connectWallet();
 
-      if (chainId !== 31337) {
-        throw new Error("Please switch MetaMask to Hardhat Local network.");
+      if (chainId !== 80002) {
+        throw new Error("Please switch MetaMask to Polygon Amoy.");
       }
 
       const musicNFT = new Contract(
@@ -78,7 +88,8 @@ export default function MusicNFTPanel() {
         uri,
         address,
         BigInt(royalty),
-        Number(category)
+        Number(category),
+        AMOY_GAS
       );
 
       await tx.wait();
@@ -108,8 +119,8 @@ export default function MusicNFTPanel() {
 
       const { signer, chainId } = await connectWallet();
 
-      if (chainId !== 31337) {
-        throw new Error("Please switch MetaMask to Hardhat Local network.");
+      if (chainId !== 80002) {
+        throw new Error("Please switch MetaMask to Polygon Amoy.");
       }
 
       const musicNFT = new Contract(
@@ -120,13 +131,14 @@ export default function MusicNFTPanel() {
 
       const tx = await musicNFT.listNFT(
         BigInt(listTokenId),
-        parseEther(listPrice)
+        parseEther(listPrice),
+        AMOY_GAS
       );
 
       await tx.wait();
 
       setMessage(
-        `NFT #${listTokenId} listed successfully for ${listPrice} ETH/POL`
+        `NFT #${listTokenId} listed successfully for ${listPrice} POL`
       );
 
       setListTokenId("");
@@ -135,6 +147,63 @@ export default function MusicNFTPanel() {
       setMessage(err?.message || "NFT listing failed.");
     } finally {
       setListing(false);
+    }
+  };
+
+  const buyNFT = async () => {
+    try {
+      setBuying(true);
+      setMessage("");
+
+      if (!buyTokenId) {
+        throw new Error("Enter the token ID you want to buy.");
+      }
+
+      const { signer, chainId } = await connectWallet();
+
+      if (chainId !== 80002) {
+        throw new Error("Please switch MetaMask to Polygon Amoy.");
+      }
+
+      const musicNFT = new Contract(
+        CONTRACT_ADDRESSES.musicNFT,
+        MUSIC_NFT_ABI,
+        signer
+      );
+
+      const currentListing = await musicNFT.listings(
+        BigInt(buyTokenId)
+      );
+
+      const seller = currentListing[0];
+      const price = currentListing[1];
+
+      if (
+        seller === "0x0000000000000000000000000000000000000000" ||
+        price === BigInt(0)
+      ) {
+        throw new Error("This NFT is not currently listed for sale.");
+      }
+
+      const tx = await musicNFT.buyNFT(
+        BigInt(buyTokenId),
+        {
+          value: price,
+          ...AMOY_GAS,
+        }
+      );
+
+      await tx.wait();
+
+      setMessage(
+        `NFT #${buyTokenId} purchased successfully`
+      );
+
+      setBuyTokenId("");
+    } catch (err: any) {
+      setMessage(err?.message || "NFT purchase failed.");
+    } finally {
+      setBuying(false);
     }
   };
 
@@ -214,7 +283,7 @@ export default function MusicNFTPanel() {
           type="number"
           min="0"
           step="any"
-          placeholder="Sale price in ETH/POL"
+          placeholder="Sale price in POL"
           value={listPrice}
           onChange={(e) => setListPrice(e.target.value)}
           className="w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-white outline-none focus:border-purple-500"
@@ -226,6 +295,29 @@ export default function MusicNFTPanel() {
           className="w-full rounded-lg bg-pink-600 px-4 py-2 font-semibold text-white hover:bg-pink-700 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {listing ? "Listing..." : "List NFT"}
+        </button>
+      </div>
+
+      <div className="space-y-3 border-t border-neutral-800 pt-4">
+        <p className="font-semibold text-white">
+          Buy NFT
+        </p>
+
+        <input
+          type="number"
+          min="1"
+          placeholder="Token ID to buy"
+          value={buyTokenId}
+          onChange={(e) => setBuyTokenId(e.target.value)}
+          className="w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-white outline-none focus:border-purple-500"
+        />
+
+        <button
+          onClick={buyNFT}
+          disabled={buying}
+          className="w-full rounded-lg bg-emerald-600 px-4 py-2 font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {buying ? "Buying..." : "Buy NFT"}
         </button>
       </div>
 
