@@ -1,32 +1,41 @@
 import { BrowserProvider } from "ethers";
 
-declare global {
-  interface Window {
-    ethereum?: any;
-  }
-}
+type EthereumProvider = {
+  request: (args: {
+    method: string;
+    params?: unknown[] | Record<string, unknown>;
+  }) => Promise<unknown>;
+};
 
-const POLYGON_AMOY_CHAIN_ID = "0x13882"; // 80002
+const POLYGON_AMOY_CHAIN_ID = "0x13882";
 
 export async function connectWallet() {
   if (typeof window === "undefined") {
     throw new Error("Browser environment required");
   }
 
-  if (!window.ethereum) {
+  const ethereum = (
+    window as Window & {
+      ethereum?: EthereumProvider;
+    }
+  ).ethereum;
+
+  if (!ethereum) {
     throw new Error("MetaMask is not installed");
   }
 
   try {
-    // Ask MetaMask to switch to Polygon Amoy
-    await window.ethereum.request({
+    await ethereum.request({
       method: "wallet_switchEthereumChain",
       params: [{ chainId: POLYGON_AMOY_CHAIN_ID }],
     });
-  } catch (switchError: any) {
-    // Chain not added in MetaMask yet
-    if (switchError?.code === 4902) {
-      await window.ethereum.request({
+  } catch (error: unknown) {
+    const switchError = error as {
+      code?: number;
+    };
+
+    if (switchError.code === 4902) {
+      await ethereum.request({
         method: "wallet_addEthereumChain",
         params: [
           {
@@ -43,11 +52,11 @@ export async function connectWallet() {
         ],
       });
     } else {
-      throw switchError;
+      throw error;
     }
   }
 
-  const provider = new BrowserProvider(window.ethereum);
+  const provider = new BrowserProvider(ethereum);
 
   await provider.send("eth_requestAccounts", []);
 
@@ -62,3 +71,4 @@ export async function connectWallet() {
     chainId: Number(network.chainId),
   };
 }
+
