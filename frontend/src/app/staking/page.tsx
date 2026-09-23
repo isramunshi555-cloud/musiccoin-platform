@@ -35,6 +35,11 @@ const FAN_TOKEN_ABI = [
 
 const SECONDS_PER_DAY = 86_400;
 
+const AMOY_GAS = {
+  maxPriorityFeePerGas: BigInt("30000000000"),
+  maxFeePerGas: BigInt("60000000000"),
+};
+
 const POOLS = [
   {
     days: 30,
@@ -160,6 +165,7 @@ export default function StakingPage() {
 
       try {
         const provider = getInjectedProvider();
+
         const contract = new Contract(
           tokenAddress,
           FAN_TOKEN_ABI,
@@ -176,6 +182,7 @@ export default function StakingPage() {
         setTokenBalance(
           formatUnits(rawBalance, 18)
         );
+
         setTotalStaked(
           formatUnits(rawTotal, 18)
         );
@@ -202,15 +209,19 @@ export default function StakingPage() {
 
                 const amount =
                   position.amount as bigint;
+
                 const startTime = Number(
                   position.startTime
                 );
+
                 const lockDuration = Number(
                   position.lockDuration
                 );
+
                 const rewardRateBps = Number(
                   position.rewardRateBps
                 );
+
                 const active =
                   position.active as boolean;
 
@@ -291,6 +302,7 @@ export default function StakingPage() {
     }
 
     const provider = getInjectedProvider();
+
     const signer = await provider.getSigner();
 
     return new Contract(
@@ -313,6 +325,7 @@ export default function StakingPage() {
       setError(
         "Enter a valid MUSIC amount."
       );
+
       return;
     }
 
@@ -323,6 +336,7 @@ export default function StakingPage() {
       setError(
         "The staking amount is greater than your MUSIC balance."
       );
+
       return;
     }
 
@@ -347,12 +361,14 @@ export default function StakingPage() {
       const transaction =
         await contract.stake(
           amount,
-          lockDuration
+          lockDuration,
+          AMOY_GAS
         );
 
       await transaction.wait();
 
       setStakeAmount("");
+
       await loadBlockchainData();
 
       alert(
@@ -378,6 +394,7 @@ export default function StakingPage() {
     setPendingAction(
       `claim-${positionId}`
     );
+
     setError("");
 
     try {
@@ -386,10 +403,12 @@ export default function StakingPage() {
 
       const transaction =
         await contract.claimReward(
-          positionId
+          positionId,
+          AMOY_GAS
         );
 
       await transaction.wait();
+
       await loadBlockchainData();
 
       alert(
@@ -415,6 +434,7 @@ export default function StakingPage() {
     setPendingAction(
       `unstake-${positionId}`
     );
+
     setError("");
 
     try {
@@ -423,10 +443,12 @@ export default function StakingPage() {
 
       const transaction =
         await contract.unstake(
-          positionId
+          positionId,
+          AMOY_GAS
         );
 
       await transaction.wait();
+
       await loadBlockchainData();
 
       alert(
@@ -772,17 +794,20 @@ export default function StakingPage() {
                 • Positions are read directly
                 from FanToken.sol.
               </li>
+
               <li>
                 • Principal can be withdrawn
                 only after the lock period.
               </li>
+
               <li>
                 • MetaMask confirmation is
                 required for every transaction.
               </li>
+
               <li>
-                • Local Hardhat assets have no
-                real monetary value.
+                • Polygon Amoy test assets have
+                no real monetary value.
               </li>
             </ul>
           </div>
