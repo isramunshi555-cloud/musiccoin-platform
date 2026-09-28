@@ -68,7 +68,7 @@ class RPC:
 
     def call(self, method, params):
         payload = json.dumps({"jsonrpc": "2.0", "id": 1, "method": method, "params": params}).encode()
-        request = Request(self.url, payload, {"Content-Type": "application/json"})
+        request = Request(self.url, payload, {"Content-Type": "application/json", "User-Agent": "curl/8.5.0", "Accept": "*/*"})
         with urlopen(request, timeout=25) as response:
             data = json.load(response)
         if "error" in data:
