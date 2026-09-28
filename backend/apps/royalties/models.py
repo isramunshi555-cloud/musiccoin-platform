@@ -60,3 +60,18 @@ class RoyaltyPayout(models.Model):
 
     def __str__(self):
         return f"Payout {self.amount} {self.currency} to {self.recipient.role_name}"
+
+
+class OnchainNFTRoyalty(models.Model):
+    """Verified ERC-2981 payout from a MusicNFT sale (no split required)."""
+
+    contract_address = models.CharField(max_length=42)
+    token_id = models.PositiveIntegerField()
+    receiver_wallet = models.CharField(max_length=42)
+    amount = models.DecimalField(max_digits=24, decimal_places=6)
+    currency = models.CharField(max_length=10, default="POL")
+    tx_hash = models.CharField(max_length=66, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"NFT #{self.token_id}: {self.amount} {self.currency} to {self.receiver_wallet}"

@@ -77,11 +77,13 @@ class WalletTransaction(models.Model):
 class StakingRecord(models.Model):
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
         related_name="staking_positions",
     )
 
     position_id = models.PositiveIntegerField()
+    wallet_address = models.CharField(max_length=42, blank=True)
 
     amount = models.DecimalField(
         max_digits=18,

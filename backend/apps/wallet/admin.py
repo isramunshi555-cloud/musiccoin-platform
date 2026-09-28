@@ -73,6 +73,7 @@ class StakingRecordAdmin(admin.ModelAdmin):
         "id",
         "user",
         "position_id",
+        "wallet_address",
         "amount",
         "lock_duration_days",
         "is_active",

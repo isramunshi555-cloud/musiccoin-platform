@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import RoyaltySplitConfig, RoyaltyRecipient, RoyaltyPayout
+from .models import RoyaltySplitConfig, RoyaltyRecipient, RoyaltyPayout, OnchainNFTRoyalty
 
 
 class RoyaltyRecipientInline(admin.TabularInline):
@@ -23,3 +23,9 @@ class RoyaltySplitConfigAdmin(admin.ModelAdmin):
 @admin.register(RoyaltyPayout)
 class RoyaltyPayoutAdmin(admin.ModelAdmin):
     list_display = ["split", "recipient", "amount", "currency", "tx_hash", "created_at"]
+
+
+@admin.register(OnchainNFTRoyalty)
+class OnchainNFTRoyaltyAdmin(admin.ModelAdmin):
+    list_display = ["token_id", "receiver_wallet", "amount", "currency", "tx_hash", "created_at"]
+    search_fields = ["receiver_wallet", "tx_hash", "token_id"]

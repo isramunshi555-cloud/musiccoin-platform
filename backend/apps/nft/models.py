@@ -11,12 +11,14 @@ class NFTItem(models.Model):
 
     creator = models.ForeignKey(
         settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
         related_name="created_nfts",
     )
     current_owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
         related_name="owned_nfts",
     )
     title = models.CharField(max_length=255)
@@ -29,6 +31,8 @@ class NFTItem(models.Model):
     
     token_id = models.PositiveIntegerField(null=True, blank=True)
     contract_address = models.CharField(max_length=255, blank=True)
+    creator_wallet = models.CharField(max_length=42, blank=True)
+    owner_wallet = models.CharField(max_length=42, blank=True)
     metadata_uri = models.CharField(max_length=500)
     image_url = models.URLField(blank=True)
     audio_url = models.URLField(blank=True)
@@ -64,7 +68,8 @@ class NFTListing(models.Model):
     )
     seller = models.ForeignKey(
         settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
         related_name="nft_sales",
     )
     listing_type = models.CharField(
@@ -87,6 +92,9 @@ class NFTListing(models.Model):
         related_name="purchased_listings",
     )
     tx_hash = models.CharField(max_length=255, blank=True)
+    seller_wallet = models.CharField(max_length=42, blank=True)
+    buyer_wallet = models.CharField(max_length=42, blank=True)
+    listing_tx_hash = models.CharField(max_length=66, blank=True)
     sold_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -95,3 +103,12 @@ class NFTListing(models.Model):
 
     def __str__(self):
         return f"Listing for {self.item.title} ({self.price} {self.currency})"
+
+
+class ChainSyncCursor(models.Model):
+    key = models.CharField(max_length=100, unique=True)
+    next_block = models.PositiveBigIntegerField()
+
+
+class ChainEvent(models.Model):
+    key = models.CharField(max_length=100, unique=True)
