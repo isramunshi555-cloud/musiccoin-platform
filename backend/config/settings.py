@@ -168,10 +168,7 @@ CORS_ALLOWED_ORIGINS = list(
         cast=Csv(),
     )
 )
-CSRF_TRUSTED_ORIGINS = [
-    "https://15.206.149.160.nip.io",
-    "http://15.206.149.160",
-]
+CSRF_TRUSTED_ORIGINS = list(config("CSRF_TRUSTED_ORIGINS", default="", cast=Csv()))
 
 # Permit common Next.js development ports.
 LOCAL_DEVELOPMENT_ORIGINS = [
