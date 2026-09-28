@@ -116,7 +116,8 @@ class StakingRecord(models.Model):
         ordering = ["-start_time"]
 
     def __str__(self):
+        owner = self.user.email if self.user_id else self.wallet_address or "Unlinked wallet"
         return (
             f"Stake #{self.position_id} "
-            f"({self.amount} MUSIC for {self.user.email})"
+            f"({self.amount} MUSIC for {owner})"
         )
