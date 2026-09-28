@@ -8,6 +8,16 @@ import { useRouter } from "next/navigation";
 
 import api from "@/lib/api";
 
+type CurrentUser = {
+  email: string;
+  first_name: string;
+  last_name: string;
+  phone: string;
+  role: string;
+  wallet_address: string | null;
+  is_verified: boolean;
+};
+
 export default function LoginPage() {
   const router = useRouter();
 
@@ -23,19 +33,59 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
+      // Step 1: Authenticate with Django.
       const response = await api.post("/auth/login/", {
         email,
         password,
       });
 
-      localStorage.setItem("access_token", response.data.access);
-      localStorage.setItem("refresh_token", response.data.refresh);
+      // Step 2: Store JWT tokens.
+      localStorage.setItem(
+        "access_token",
+        response.data.access,
+      );
 
-      const redirectTo =
-        sessionStorage.getItem("post_login_redirect") || "/dashboard";
+      localStorage.setItem(
+        "refresh_token",
+        response.data.refresh,
+      );
 
+      // Step 3: Get the logged-in user's role.
+      const userResponse =
+        await api.get<CurrentUser>("/users/me/");
+
+      const role = userResponse.data.role;
+
+      // Remove any old redirect information.
       sessionStorage.removeItem("post_login_redirect");
-      router.push(redirectTo);
+
+      // Step 4: Redirect each role to its own portal.
+      switch (role) {
+        case "FAN":
+          router.replace("/fan/dashboard");
+          break;
+
+        case "ARTIST":
+          router.replace("/artist/dashboard");
+          break;
+
+        case "ORGANIZER":
+          router.replace("/organizer/dashboard");
+          break;
+
+        case "PRODUCTION_HOUSE":
+          router.replace("/production/dashboard");
+          break;
+
+        case "ADMIN":
+          router.replace("/admin-dashboard");
+          break;
+
+        default:
+          setError(
+            `Your account role "${role}" does not have a dashboard configured.`,
+          );
+      }
     } catch (requestError) {
       if (axios.isAxiosError(requestError)) {
         setError(
@@ -55,17 +105,23 @@ export default function LoginPage() {
       <div
         className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-40"
         style={{
-          backgroundImage: "url('/musiccoin-login-bg.png')",
+          backgroundImage:
+            "url('/musiccoin-login-bg.png')",
         }}
       />
 
       <div className="absolute inset-0 bg-gradient-to-r from-[#07070a]/65 via-[#07070a]/85 to-[#07070a]/95" />
+
       <div className="absolute -left-32 top-10 h-96 w-96 rounded-full bg-violet-700/20 blur-[120px]" />
+
       <div className="absolute -right-32 bottom-0 h-96 w-96 rounded-full bg-amber-500/10 blur-[120px]" />
 
       <div className="relative mx-auto grid min-h-screen max-w-7xl lg:grid-cols-2">
         <section className="hidden flex-col justify-between p-14 lg:flex">
-          <Link href="/" className="flex w-fit items-center gap-3">
+          <Link
+            href="/"
+            className="flex w-fit items-center gap-3"
+          >
             <Image
               src="/musiccoin-logo.png"
               alt="MusicCoin logo"
@@ -87,14 +143,16 @@ export default function LoginPage() {
 
             <h1 className="text-5xl font-semibold leading-[1.1] tracking-tight xl:text-6xl">
               Music, ownership
+
               <span className="block bg-gradient-to-r from-violet-400 via-fuchsia-400 to-amber-300 bg-clip-text text-transparent">
                 and unforgettable moments.
               </span>
             </h1>
 
             <p className="mt-7 max-w-lg text-lg leading-8 text-neutral-300">
-              Discover artists, attend exclusive events and collect
-              digital experiences built for true music fans.
+              Discover artists, attend exclusive events and
+              collect digital experiences built for true music
+              fans.
             </p>
 
             <div className="mt-10 flex flex-wrap gap-3">
@@ -133,7 +191,9 @@ export default function LoginPage() {
                 className="h-12 w-12 object-contain"
               />
 
-              <span className="text-xl font-semibold">MusicCoin</span>
+              <span className="text-xl font-semibold">
+                MusicCoin
+              </span>
             </Link>
 
             <div className="rounded-3xl border border-white/10 bg-black/40 p-7 shadow-2xl shadow-black/50 backdrop-blur-xl sm:p-10">
@@ -146,10 +206,14 @@ export default function LoginPage() {
               </h2>
 
               <p className="mt-3 text-sm leading-6 text-neutral-400">
-                Enter your details to continue your musical journey.
+                Enter your details to continue your musical
+                journey.
               </p>
 
-              <form onSubmit={handleSubmit} className="mt-8 space-y-5">
+              <form
+                onSubmit={handleSubmit}
+                className="mt-8 space-y-5"
+              >
                 <div>
                   <label
                     htmlFor="email"
@@ -162,7 +226,9 @@ export default function LoginPage() {
                     id="email"
                     type="email"
                     value={email}
-                    onChange={(event) => setEmail(event.target.value)}
+                    onChange={(event) =>
+                      setEmail(event.target.value)
+                    }
                     required
                     autoComplete="email"
                     placeholder="name@example.com"
@@ -190,7 +256,11 @@ export default function LoginPage() {
                   <div className="relative">
                     <input
                       id="password"
-                      type={showPassword ? "text" : "password"}
+                      type={
+                        showPassword
+                          ? "text"
+                          : "password"
+                      }
                       value={password}
                       onChange={(event) =>
                         setPassword(event.target.value)
@@ -204,7 +274,9 @@ export default function LoginPage() {
                     <button
                       type="button"
                       onClick={() =>
-                        setShowPassword((current) => !current)
+                        setShowPassword(
+                          (current) => !current,
+                        )
                       }
                       className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-medium text-neutral-400 hover:text-white"
                     >
@@ -224,15 +296,19 @@ export default function LoginPage() {
                   disabled={loading}
                   className="w-full rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 px-4 py-3.5 font-semibold shadow-lg shadow-violet-950/40 transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {loading ? "Logging in..." : "Log in"}
+                  {loading
+                    ? "Logging in..."
+                    : "Log in"}
                 </button>
               </form>
 
               <div className="my-7 flex items-center gap-4">
                 <div className="h-px flex-1 bg-white/10" />
+
                 <span className="text-xs uppercase tracking-wider text-neutral-600">
                   New here?
                 </span>
+
                 <div className="h-px flex-1 bg-white/10" />
               </div>
 
