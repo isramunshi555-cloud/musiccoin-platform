@@ -24,7 +24,7 @@ class VerifiedSaleSyncTests(TestCase):
         command = Command()
         command.nft, command.token = contract, token
         command.rpc = Mock()
-        command.rpc.call.return_value = {"timestamp": hex(1_800_000_000)}
+        command.rpc.call.side_effect = lambda method, params: {"timestamp": hex(1_800_000_000 + int(params[0], 16))}
         command.item = Mock(return_value=item)
         tx = "0x" + "de" * 32
         padded = lambda wallet: "0x" + "0" * 24 + wallet[2:]
@@ -43,6 +43,13 @@ class VerifiedSaleSyncTests(TestCase):
         command.process([sale])
         command.process([listing])
         command.process([listing, sale])
+        mint = {
+            "address": contract,
+            "topics": [topic("MusicNFTMinted(uint256,address,address,string,address,uint96,uint8)"), hex(2), padded(seller), padded(seller)],
+            "data": "0x" + f"{128:064x}" + seller[2:].rjust(64, "0") + f"{1000:064x}" + f"{0:064x}",
+            "transactionHash": "0x" + "aa" * 32, "blockNumber": "0x0", "logIndex": "0x0",
+        }
+        command.process([mint])
         item.refresh_from_db()
         self.assertEqual(item.owner_wallet, buyer)
         self.assertIsNone(item.current_owner)

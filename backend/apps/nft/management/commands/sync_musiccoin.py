@@ -157,6 +157,10 @@ class Command(BaseCommand):
                           "from_address": wallet, "to_address": to},
             )
 
+    def has_later_sale(self, item, log):
+        """Historical mint/transfer replays must preserve newer sale ownership."""
+        return NFTListing.objects.filter(item=item, sold_at__gt=self.block_time(log)).exists()
+
     def process(self, logs):
         for log in sorted(logs, key=lambda entry: (int(entry["blockNumber"], 16), int(entry["logIndex"], 16))):
             contract = log["address"].lower()
@@ -177,8 +181,9 @@ class Command(BaseCommand):
                 item = self.item(token_id, contract)
                 if kind == "mint":
                     creator, owner = address(topics[2]), address(topics[3])
-                    item.creator_wallet, item.owner_wallet = creator, owner
-                    item.creator, item.current_owner = account(creator), account(owner)
+                    item.creator_wallet, item.creator = creator, account(creator)
+                    if not self.has_later_sale(item, log):
+                        item.owner_wallet, item.current_owner = owner, account(owner)
                     item.royalty_receiver = address(data[2 + 64:2 + 128])
                     item.royalty_percentage = Decimal(word(data, 2)) / 100
                     item.tx_hash = tx_hash
@@ -216,7 +221,8 @@ class Command(BaseCommand):
                     listing.seller, listing.buyer = account(seller), account(buyer)
                     listing.tx_hash, listing.sold_at, listing.is_active = tx_hash, self.block_time(log), False
                     listing.save()
-                    item.owner_wallet, item.current_owner = buyer, account(buyer)
+                    if not self.has_later_sale(item, log):
+                        item.owner_wallet, item.current_owner = buyer, account(buyer)
                     item.royalty_receiver = receiver
                     if price:
                         item.royalty_percentage = Decimal(royalty_raw) * 100 / Decimal(price)
@@ -234,8 +240,9 @@ class Command(BaseCommand):
                 token_id = int(topics[3], 16)
                 item = self.item(token_id, contract)
                 owner = address(topics[2])
-                item.owner_wallet, item.current_owner = owner, account(owner)
-                item.save(update_fields=["owner_wallet", "current_owner", "updated_at"])
+                if not self.has_later_sale(item, log):
+                    item.owner_wallet, item.current_owner = owner, account(owner)
+                    item.save(update_fields=["owner_wallet", "current_owner", "updated_at"])
                 ChainEvent.objects.create(key=event_key)
                 continue
             wallet, position_id = address(topics[1]), int(topics[2], 16)
