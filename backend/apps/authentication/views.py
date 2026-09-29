@@ -2,6 +2,7 @@ from django.conf import settings
 from django.core.mail import send_mail
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
+from urllib.parse import urlencode
 
 from rest_framework import status
 from rest_framework.generics import CreateAPIView
@@ -43,6 +44,17 @@ class ForgotPasswordView(APIView):
         serializer = ForgotPasswordSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
+        # A console backend only prints the link in server logs. Never claim
+        # to have emailed a user when production mail is not configured.
+        if not settings.DEBUG and (
+            settings.EMAIL_BACKEND == "django.core.mail.backends.console.EmailBackend"
+            or not settings.PASSWORD_RESET_BASE_URL.startswith("https://")
+        ):
+            return Response(
+                {"detail": "Password reset email is not configured."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
         user = User.objects.filter(
             email=serializer.validated_data["email"],
             is_active=True,
@@ -53,8 +65,8 @@ class ForgotPasswordView(APIView):
             token = password_reset_token.make_token(user)
 
             reset_url = (
-                f"http://localhost:3000/reset-password"
-                f"?uid={uid}&token={token}"
+                f"{settings.PASSWORD_RESET_BASE_URL.rstrip('/')}/reset-password"
+                f"?{urlencode({'uid': uid, 'token': token})}"
             )
 
             send_mail(
