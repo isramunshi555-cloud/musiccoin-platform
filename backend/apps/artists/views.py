@@ -1,3 +1,5 @@
+from django.shortcuts import get_object_or_404
+
 from rest_framework.generics import (
     CreateAPIView,
     ListAPIView,
@@ -20,7 +22,7 @@ class ArtistListView(ListAPIView):
 class ArtistDetailView(RetrieveAPIView):
     queryset = ArtistProfile.objects.select_related("user").all()
     serializer_class = ArtistProfileSerializer
-    permission_classes_classes = [AllowAny]
+    permission_classes = [AllowAny]
 
 
 class ArtistProfileCreateView(CreateAPIView):
@@ -36,6 +38,7 @@ class MyArtistProfileView(RetrieveUpdateAPIView):
     permission_classes = [IsArtist]
 
     def get_object(self):
-        return ArtistProfile.objects.select_related("user").get(
-            user=self.request.user
+        return get_object_or_404(
+            ArtistProfile.objects.select_related("user"),
+            user=self.request.user,
         )
